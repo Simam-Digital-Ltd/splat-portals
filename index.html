@@ -6,7 +6,7 @@
 <title>Splat Portals</title>
 <meta name="description" content="Floating soap-bubble portals between Gaussian splat worlds in the browser. Scroll a bubble to change the world inside, click it to grow it and step in, click anywhere to open another. Open source from Simam Digital.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,500;1,500&display=swap" rel="stylesheet">
 <style>
 :root { --fg: #f7f3ff; --muted: #cbc2e6; --glass: rgba(14, 10, 26, .62); --line: rgba(255, 255, 255, .14); --hot: #ff7ae0; --cool: #7ad8ff; color-scheme: dark; }
 * { box-sizing: border-box; } [hidden] { display: none !important; }
@@ -34,6 +34,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .plabel small { color: var(--muted); margin-left: 6px; }
 #title { position: fixed; z-index: 6; inset: 0; display: grid; place-items: center; pointer-events: none; text-align: center; opacity: 0; transition: opacity .6s; }
 #title.on { opacity: 1; }
+/* story mode: no interface, captions, letterbox, fades */
+body.story #top, body.story #dock, body.story #credit, body.story #hint, body.story #labels, body.story #title { display: none; }
+body.story canvas { cursor: none; }
+#fade { position: fixed; inset: 0; z-index: 7; background: #000; opacity: 0; pointer-events: none; transition: opacity .9s ease; }
+.bar { position: fixed; left: 0; right: 0; height: 0; z-index: 6; background: #000; transition: height 1.6s cubic-bezier(.6, 0, .2, 1); }
+.bar.t { top: 0; } .bar.b { bottom: 0; }
+body.story.letterbox .bar { height: 9vh; }
+#cap { position: fixed; z-index: 8; left: 50%; bottom: 15vh; width: min(88vw, 980px); transform: translate(-50%, 14px); text-align: center; opacity: 0; transition: opacity 1.1s ease, transform 1.6s cubic-bezier(.2, .7, .2, 1); pointer-events: none; }
+#cap.on { opacity: 1; transform: translate(-50%, 0); }
+#cap b { display: block; font: italic 500 clamp(30px, 4.4vw, 68px)/1.08 "Cormorant Garamond", Georgia, serif; text-wrap: balance; text-shadow: 0 2px 30px rgba(0, 0, 0, .75); }
+#cap span { display: block; margin-top: 14px; font-size: clamp(11px, 1.15vw, 15px); letter-spacing: .32em; text-transform: uppercase; color: #ece6ff; text-shadow: 0 1px 14px rgba(0, 0, 0, .9); }
+#endcard { position: fixed; inset: 0; z-index: 8; display: grid; place-content: center; gap: 14px; text-align: center; opacity: 0; transition: opacity 1.4s ease; pointer-events: none; }
+#endcard.on { opacity: 1; }
+#endcard b { font: 500 clamp(34px, 5vw, 72px)/1 "Cormorant Garamond", Georgia, serif; }
+#endcard span { font-size: clamp(12px, 1.2vw, 16px); letter-spacing: .3em; text-transform: uppercase; color: #d9d0f5; }
+#playbox { position: fixed; inset: 0; z-index: 9; display: none; place-content: center; text-align: center; gap: 16px; background: rgba(4, 3, 9, .55); }
+body.storywait #playbox { display: grid; }
+#playbox button { justify-self: center; font: 500 18px "Space Grotesk", sans-serif; color: #fff; background: linear-gradient(90deg, rgba(255, 122, 224, .35), rgba(122, 216, 255, .35)); border: 1px solid rgba(255, 255, 255, .35); border-radius: 999px; padding: 14px 30px; cursor: pointer; }
+#playbox p { margin: 0; max-width: 36ch; color: var(--muted); font-size: 13px; }
+@media (max-aspect-ratio: 1/1) { #cap { bottom: 19vh; } body.story.letterbox .bar { height: 0; } }
 #title div { font: 700 clamp(30px, 6vw, 64px)/1 "Space Grotesk", sans-serif; letter-spacing: -.01em; text-shadow: 0 6px 40px rgba(0, 0, 0, .6); }
 #title small { display: block; margin-top: 10px; font-size: 15px; font-weight: 500; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
 #load { position: fixed; z-index: 9; inset: 0; display: grid; place-items: center; background: #06040c; transition: opacity .7s; }
@@ -71,6 +91,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 </header>
 <div id="hint" class="glass">Scroll on a bubble to change its world · click it, or walk into it, to step in · click anywhere to open another · drag to look · hold or W A S D to walk</div>
 <div id="dock" class="glass"><span class="label">Nearest bubble</span><div id="worlds"></div></div>
+<div class="bar t"></div><div class="bar b"></div><div id="fade"></div>
+<div id="cap"><b></b><span></span></div>
+<div id="endcard"><b>Simam Digital</b><span>Gaussian splat worlds in the browser</span><span style="letter-spacing:.12em;text-transform:none">lab.simamdigital.com</span></div>
+<div id="playbox"><button id="playBtn">Play the story</button><p>Sound on. Record at 1080 × 1920 for Reels and TikTok, or full screen for YouTube. R replays, Esc stops. Add &amp;letterbox for cinema bars.</p></div>
 <div id="title"><div id="titleT"></div><small id="titleS"></small></div>
 <div id="credit">Inspired by <a href="https://x.com/XRarchitect" target="_blank" rel="noopener">Ian Curtis (@XRarchitect)</a> of World Labs · Open source on <a href="https://github.com/Simam-Digital-Ltd/splat-portals" target="_blank" rel="noopener">GitHub</a> · AI-generated worlds by Simam Digital</div>
 <div id="load"><div class="in"><b>Opening the first world</b><div class="bar"><i id="loadBar"></i></div><span id="loadMsg" style="color:var(--muted);font-size:13px">Loading splats</span></div></div>
@@ -80,7 +104,7 @@ import * as THREE from "three";
 import { SparkRenderer, SplatMesh, dyno } from "@sparkjsdev/spark";
 
 const BASE = location.pathname.includes("/demos/") ? "/demos/portals/" : "./";
-const Q = new URLSearchParams(location.search), DEBUG = Q.has("debug");
+const Q = new URLSearchParams(location.search), DEBUG = Q.has("debug"), STORY = Q.has("story");
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const PHONE = matchMedia("(pointer: coarse)").matches;
 let MAXP = PHONE ? 2 : 3;   // bubbles at once (each one draws a whole extra world every frame); quality may lower it
@@ -88,16 +112,13 @@ const $ = (id) => document.getElementById(id);
 const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 
 // ---------- the worlds (AI-generated Gaussian splats). flip: stored y-down, so turn it the right way up ----------
-const WORLDS = [   // lite: a smaller version (no view-dependent colour, 30% of the splats) shown while the full file downloads
-  { id: "pavilion", name: "Beach pavilion", file: "worlds/pavilion.sog", flip: false },
-  { id: "bay", name: "Quiet bay", file: "worlds/bay.sog", flip: false },
-  { id: "gallery", name: "Sculpture gallery", file: "worlds/gallery.sog", flip: false },
-  { id: "bedroom", name: "Sunlit bedroom", file: "worlds/bedroom.sog", flip: true },
-  { id: "church", name: "Old church", file: "worlds/church.sog", flip: true },
-  { id: "rock-tomb", name: "Rock-cut tomb", file: "worlds/rock-tomb.sog", flip: false },
-  { id: "tombs", name: "Desert tombs", file: "worlds/tombs.sog", flip: false },
-  { id: "pyramids", name: "Pyramids", file: "worlds/pyramids.sog", flip: false },
-].map((w) => ({ ...w, lite: w.file.replace("worlds/", "worlds/lite/") }));
+// ---------- the worlds are listed in worlds.json; a story can bring its own (they stay out of the dock) ----------
+const WORLDS = await (await fetch(BASE + "worlds.json")).json();
+const SNAME = (Q.get("story") || "default").replace(/[^\w-]/g, "");
+const SDEF = STORY ? await fetch(`${BASE}stories/${SNAME}.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
+for (const w of SDEF?.worlds || []) if (!WORLDS.some((x) => x.id === w.id)) WORLDS.push({ ...w, hidden: true });
+const WIX = (id) => WORLDS.findIndex((w) => w.id === id), V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+const story = { cam: null, run: 0 };   // ?story owns the camera while it plays
 if (Q.has("flips")) Q.get("flips").split("").forEach((c, i) => WORLDS[i] && (WORLDS[i].flip = c === "1"));
 
 // ---------- renderer ----------
@@ -123,7 +144,7 @@ const SOFT = /swiftshader|llvmpipe|softpipe|basic render|software/i.test(GPU);  
 const WEAK = /mali-[2-7]\d\d|mali-g[1-5]\d\b|adreno[^0-9]*[3-5]\d\d|powervr|gma /i.test(GPU) || (navigator.deviceMemory ?? 8) <= 4 || (navigator.hardwareConcurrency ?? 8) <= 4;
 const QP = { light: 0, balanced: 1, high: 2, full: 3 }[Q.get("quality")];
 const startStep = SOFT ? 0 : WEAK ? 1 : PHONE || /intel/i.test(GPU) ? 2 : 3, qTop = PHONE ? 2 : 3;
-let qAuto = QP === undefined, step = QP ?? startStep, QL = STEPS[step], lastUp = -1, quietUntil = 0;
+let qAuto = QP === undefined && !STORY, step = QP ?? (STORY ? 3 : startStep), QL = STEPS[step], lastUp = -1, quietUntil = 0;
 const upFails = [0, 0, 0, 0];
 function tuneSpark(w) { w.spark.maxStdDev = QL.std; w.spark.maxPixelRadius = QL.px; w.spark.minSortIntervalMs = QL.sortMs; }
 function applyQuality() {
@@ -157,7 +178,7 @@ async function fetchBytes(url, onProg) {
 function loadWorld(i, onProg) {   // the light version first, unless the full file is already on disk; the full one swaps in behind it
   if (cache.has(i)) return cache.get(i);
   const W = WORLDS[i], p = (async () => {
-    if (!W.lite || (await stored(BASE + W.file))) return buildWorld(i, W.file, onProg);
+    if (!W.lite || STORY || (await stored(BASE + W.file))) return buildWorld(i, W.file, onProg);   // the story records at full quality
     const rec = await buildWorld(i, W.lite, onProg); rec.lite = true; if (step > 0) queueUpgrade(i, rec); return rec;   // Light quality keeps the light version
   })();
   cache.set(i, p); return p;
@@ -180,18 +201,52 @@ async function upgrade(i, lite) {   // one at a time, in the order the worlds we
 }
 function scrap(w) { try { w.mesh.dispose?.(); w.spark.dispose?.(); } catch {} }
 async function buildWorld(i, file, onProg) {
-    const W = WORLDS[i], scene = new THREE.Scene(); scene.background = new THREE.Color(0x06040c); const spark = new SparkRenderer({ renderer }); scene.add(spark);
+    const W = WORLDS[i], scene = new THREE.Scene(); scene.background = new THREE.Color(W.bg ?? 0x06040c); const spark = new SparkRenderer({ renderer }); scene.add(spark);
+    const S = W.scene ? await (await fetch(BASE + W.scene)).json() : null;
     const mesh = new SplatMesh({ fileBytes: await fetchBytes(BASE + file, onProg), fileType: "pcsogszip" });
     await mesh.initialized;
     if (W.flip) mesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
-    const U = { clip: dyno.dynoVec4(new THREE.Vector4(0, 0, 0, -1e9)), burst: dyno.dynoFloat(0), bp: dyno.dynoVec3(new THREE.Vector3()), glowP: dyno.dynoVec3(new THREE.Vector3(1e9, 0, 0)), glowR: dyno.dynoFloat(0), t: dyno.dynoFloat(0) };
+    let crop = new THREE.Vector4(0, 0, 0, 1e9);
+    const WS = (W.wind?.spheres || []).slice(0, 4), wind = {}, windT = {};
+    if (S) {   // place the capture in metres, y up, and crop the far, thin edges of the scan
+      const M = new THREE.Matrix4().fromArray(S.matrix).transpose(); M.decompose(mesh.position, mesh.quaternion, mesh.scale); mesh.updateMatrixWorld(true);
+      const mid = S.path.reduce((a, x) => a.add(V3(x.p)), new THREE.Vector3()).multiplyScalar(1 / S.path.length).setY(0);
+      const c = mid.applyMatrix4(M.clone().invert()); crop.set(c.x, c.y, c.z, (S.crop_m || 90) / Math.abs(mesh.scale.x));
+    }
+    const U = { clip: dyno.dynoVec4(new THREE.Vector4(0, 0, 0, -1e9)), burst: dyno.dynoFloat(0), bp: dyno.dynoVec3(new THREE.Vector3()), glowP: dyno.dynoVec3(new THREE.Vector3(1e9, 0, 0)), glowR: dyno.dynoFloat(0), t: dyno.dynoFloat(0), crop: dyno.dynoVec4(crop) };
+    if (WS.length) {   // wind: spheres in world metres [x, y, z, radius, ground y, canopy top y]; the shader works in the splat's own space, so pass both ways
+      mesh.updateMatrixWorld(true); const e = mesh.matrixWorld.elements, iv = new THREE.Matrix3().setFromMatrix4(mesh.matrixWorld).invert().elements, wd = W.wind, v3 = (a, b, c) => dyno.dynoVec3(new THREE.Vector3(a, b, c));
+      Object.assign(wind, { wr0: v3(e[0], e[4], e[8]), wr1: v3(e[1], e[5], e[9]), wr2: v3(e[2], e[6], e[10]), wt: v3(e[12], e[13], e[14]),
+        ir0: v3(iv[0], iv[3], iv[6]), ir1: v3(iv[1], iv[4], iv[7]), ir2: v3(iv[2], iv[5], iv[8]),
+        wp: dyno.dynoVec4(new THREE.Vector4(wd.strength ?? 0.12, wd.speed ?? 1.6, wd.gust ?? 0.5, wd.flutter ?? 0.3)),
+        wq: dyno.dynoVec4(new THREE.Vector4(wd.direction ?? 0.6, wd.travel ?? 2, wd.leavesOnly === false ? 0 : 1, 0)) });
+      for (const k of ["wr0", "wr1", "wr2", "wt", "ir0", "ir1", "ir2"]) windT[k] = "vec3"; windT.wp = windT.wq = "vec4";
+      WS.forEach((q, k) => { wind["s" + k] = dyno.dynoVec4(new THREE.Vector4(q[0], q[1], q[2], q[3])); wind["g" + k] = dyno.dynoVec4(new THREE.Vector4(k + 1, q[4], q[5], 0)); windT["s" + k] = windT["g" + k] = "vec4"; });
+    }
+    const windGL = (i, o) => !WS.length ? "" : `
+          { vec3 wpos = vec3(dot(${i.wr0}, p), dot(${i.wr1}, p), dot(${i.wr2}, p)) + ${i.wt};
+            float sw = 0.0, hh = 0.0, tid = 0.0;
+            ${WS.map((_, k) => `{ float d = distance(wpos, ${i["s" + k]}.xyz); if (d < ${i["s" + k]}.w) {
+              float h = clamp((wpos.y - ${i["g" + k]}.y) / max(${i["g" + k]}.z - ${i["g" + k]}.y, 1e-3), 0.0, 1.0);
+              float q = pow(h, 1.3) * (1.0 - smoothstep(${i["s" + k]}.w * 0.75, ${i["s" + k]}.w, d)); if (q > sw) { sw = q; hh = h; tid = ${i["g" + k]}.x; } } }`).join("\n            ")}
+            vec4 cl = ${i.gsplat}.rgba; sw *= mix(1.0, smoothstep(0.0, 0.05, cl.g - max(cl.r, cl.b)), ${i.wq}.z);   // leaves sway; stone, walls and signs do not
+            if (sw > 0.0) {
+              float ph = fract(tid * 0.61803) * 6.28318 + 0.6 * sin(wpos.x * 0.37) + 0.6 * sin(wpos.z * 0.29), tt = ${i.t};
+              vec2 wd = vec2(cos(${i.wq}.x), sin(${i.wq}.x));
+              float mag = ${i.wp}.x * sw * (1.0 + ${i.wp}.z * sin(tt * 0.5 + ph)) * sin(tt * ${i.wp}.y - hh * ${i.wq}.y + ph);   // bend travels up the tree, with gusts
+              float flick = ${i.wp}.x * ${i.wp}.w * sw * sin(tt * ${i.wp}.y * 3.1 + ph * 2.3 + hh * 17.0);   // leaf flutter, across the wind
+              vec3 off = vec3(wd.x * mag - wd.y * flick, 0.0, wd.y * mag + wd.x * flick);
+              ${o.gsplat}.center += vec3(dot(${i.ir0}, off), dot(${i.ir1}, off), dot(${i.ir2}, off));
+            } }`;
     mesh.objectModifier = dyno.dynoBlock({ gsplat: dyno.Gsplat }, { gsplat: dyno.Gsplat }, ({ gsplat }) => {
-      const d = new dyno.Dyno({ inTypes: { gsplat: dyno.Gsplat, clip: "vec4", burst: "float", bp: "vec3", gp: "vec3", gr: "float", t: "float" }, outTypes: { gsplat: dyno.Gsplat },
+      const d = new dyno.Dyno({ inTypes: { gsplat: dyno.Gsplat, clip: "vec4", burst: "float", bp: "vec3", gp: "vec3", gr: "float", t: "float", crop: "vec4", ...windT }, outTypes: { gsplat: dyno.Gsplat },
         statements: ({ inputs: i, outputs: o }) => dyno.unindentLines(`
           ${o.gsplat} = ${i.gsplat};
           vec3 p = ${i.gsplat}.center;
           float side = dot(${i.clip}.xyz, p) + ${i.clip}.w;
           ${o.gsplat}.rgba.a *= 1.0 - smoothstep(-0.04, 0.0, side);
+          ${o.gsplat}.rgba.a *= step(distance(p, ${i.crop}.xyz), ${i.crop}.w);
+          ${windGL(i, o)}
           float dg = distance(p, ${i.gp});
           float ring = exp(-pow((dg - ${i.gr}) * 2.2, 2.0));
           float tw = 0.5 + 0.5 * sin(${i.t} * 7.0 + dot(p, vec3(91.7, 47.3, 13.1)));
@@ -204,10 +259,10 @@ async function buildWorld(i, file, onProg) {
             ${o.gsplat}.rgba.rgb = mix(${o.gsplat}.rgba.rgb, vec3(1.0, 0.75, 1.0), ${i.burst} * 0.5);
             ${o.gsplat}.rgba.a *= 1.0 - smoothstep(0.55, 1.0, ${i.burst});
           }`) });
-      return { gsplat: d.apply({ gsplat, clip: U.clip, burst: U.burst, bp: U.bp, gp: U.glowP, gr: U.glowR, t: U.t }).gsplat };
+      return { gsplat: d.apply({ gsplat, clip: U.clip, burst: U.burst, bp: U.bp, gp: U.glowP, gr: U.glowR, t: U.t, crop: U.crop, ...wind }).gsplat };
     });
     mesh.updateGenerator(); scene.add(mesh); scene.updateMatrixWorld(true);
-    const rec = { i, scene, spark, mesh, U }; tuneSpark(rec);
+    const rec = { i, scene, spark, mesh, U, S, windy: WS.length > 0 }; tuneSpark(rec);
     quietUntil = performance.now() + 1500; return rec;   // the collision grid is built only when you enter the world
 }
 // solid space: a 12 cm voxel grid of the world's opaque, small splats (so sparks can hit walls, beds and floors)
@@ -237,13 +292,13 @@ function warmList() {   // the worlds one scroll away from each bubble, the bubb
 }
 let warming = false;
 async function prewarm() {   // decode those worlds ahead of time, one by one, so a scroll swaps instantly
-  if (warming) return; warming = true;
+  if (warming || STORY) return; warming = true;
   try { for (const i of warmList()) { if (cache.has(i)) continue; if (portals.some((p) => p.loading) || busy()) break; await loadWorld(i); await new Promise((r) => setTimeout(r, 400)); } }
   catch (e) { console.warn("prewarm", e); } finally { warming = false; }
 }
 async function prefetchAll() {   // then download every other world into cache storage in the background (not on slow or metered connections)
   const store = await openStore(); if (!store || SLOW_NET) return;
-  const order = [...WORLDS.keys()].map((k) => (here + k) % WORLDS.length).slice(0, PHONE ? 4 : WORLDS.length);
+  const order = [...WORLDS.keys()].map((k) => (here + k) % WORLDS.length).filter((i) => !WORLDS[i].hidden).slice(0, PHONE ? 4 : WORLDS.length);
   for (const i of order) {
     const url = BASE + WORLDS[i].file;
     try {
@@ -255,6 +310,7 @@ async function prefetchAll() {   // then download every other world into cache s
   }
 }
 async function evict() {   // keep the GPU light: the world you are in, the bubbles' worlds, and the ones a scroll away
+  if (STORY) return;   // the story keeps its few worlds ready
   const keep = new Set([here, ...portals.map((p) => p.w), ...warmList()]);
   for (const [i, pr] of [...cache]) {
     if (keep.has(i)) continue;
@@ -381,7 +437,7 @@ async function setWorld(P, w) {
   P.B = world; setClip(world, true); P.loading = false; P.mat.uniforms.uLoading.value = 0; P.flash = 1; label(P); updateDock(); evict(); setTimeout(prewarm, 500); burst(P, 260); poke(P, Math.random() * 6.28, 0.35);
 }
 function label(P) { P.label.innerHTML = `${WORLDS[P.w].name}<small>${PHONE ? "swipe to change · tap to enter" : "scroll to change · click to enter"}</small>`; }
-const used = () => new Set([here, ...portals.map((p) => p.w)]);
+const used = () => new Set([here, ...portals.map((p) => p.w), ...WORLDS.flatMap((w, i) => (w.hidden ? [i] : []))]);   // hidden worlds never come up in a bubble
 function freeWorld(from, dir = 1) { const u = used(); for (let k = 1; k <= WORLDS.length; k++) { const i = (((from + dir * k) % WORLDS.length) + WORLDS.length) % WORLDS.length; if (!u.has(i)) return i; } return null; }
 function cycle(P, dir) { const u = used(); u.delete(P.w); for (let k = 1; k <= WORLDS.length; k++) { const i = (((P.w + dir * k) % WORLDS.length) + WORLDS.length) % WORLDS.length; if (!u.has(i)) { setWorld(P, i); sfxBlip(); sfxSwish(Math.max(-0.8, Math.min(0.8, P.pos.clone().project(camera).x))); return; } } }
 function setShape(s) { shape = s; for (const P of portals) { P.mat.uniforms.uShape.value = s; P.sparkMat.uniforms.uShape.value = s; } for (const b of document.querySelectorAll("[data-shape]")) b.classList.toggle("on", +b.dataset.shape === s); }
@@ -546,7 +602,7 @@ function setChord() {
   amb.voices.forEach((v, i) => { const f = r * Math.pow(2, ch[i] / 12); v.o1.frequency.setTargetAtTime(f, t, 2.5); v.o2.frequency.setTargetAtTime(f * 2, t, 2.5); v.g.gain.setTargetAtTime(i > 2 ? 0.1 : 0.18, t, 2); });
 }
 function setMood(id) {
-  if (!amb) return; const m = MOODS[id] || MOODS.bedroom, t = AC.currentTime; amb.mood = m;
+  if (!amb) return; const m = MOODS[id] || WORLDS.find((w) => w.id === id)?.mood || MOODS.bedroom, t = AC.currentTime; amb.mood = m;
   amb.lp.frequency.setTargetAtTime(m.bright, t, 2);
   amb.nf.type = m.air === "wind" ? "bandpass" : "lowpass"; amb.nf.frequency.setTargetAtTime(m.air === "sea" ? 700 : m.air === "wind" ? 1300 : 380, t, 2);
   amb.ng.gain.setTargetAtTime(m.wave * 0.9, t, 2.5); amb.swG.gain.setTargetAtTime(m.wave * 0.8, t, 2.5); amb.sw.frequency.setTargetAtTime(m.air === "sea" ? 0.1 : 0.05, t, 1);
@@ -647,7 +703,7 @@ canvas.addEventListener("pointermove", (e) => {
   const dx = (e.clientX - drag.x) * 0.0042; yaw -= dx; yawVel = -dx / 0.016; pitch = Math.max(-1.3, Math.min(1.3, pitch - (e.clientY - drag.y) * 0.0042)); drag.x = e.clientX; drag.y = e.clientY;
 });
 canvas.addEventListener("pointerup", (e) => {
-  const d = drag; drag = null; if (!d || d.walk || d.swiped || Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 6 || busy() || !A) return;
+  const d = drag; drag = null; if (STORY || !d || d.walk || d.swiped || Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 6 || busy() || !A) return;
   const P = portalAt(e.clientX, e.clientY);
   if (P) return expandPortal(P);
   // open another bubble where you clicked
@@ -660,16 +716,16 @@ canvas.addEventListener("pointerup", (e) => {
   makePortal(w, at);
 });
 canvas.addEventListener("wheel", (e) => {
-  e.preventDefault(); const P = portalAt(e.clientX, e.clientY);
+  e.preventDefault(); if (STORY) return; const P = portalAt(e.clientX, e.clientY);
   if (P) { if (performance.now() - (P.lastWheel || 0) > 380) { P.lastWheel = performance.now(); cycle(P, e.deltaY > 0 ? 1 : -1); } return; }
   if (!busy()) pos.addScaledVector(fwd(), -e.deltaY * 0.0025);
 }, { passive: false });
-addEventListener("keydown", (e) => { keys[e.code] = true; if (e.code === "Space") { e.preventDefault(); const P = nearest(); if (P) expandPortal(P); } });
+addEventListener("keydown", (e) => { if (STORY) return storyKey(e); keys[e.code] = true; if (e.code === "KeyC" && !e.ctrlKey && !e.metaKey) copyCam(); if (e.code === "Space") { e.preventDefault(); const P = nearest(); if (P) expandPortal(P); } });
 addEventListener("keyup", (e) => (keys[e.code] = false));
 const nearest = () => portals.filter((p) => p.B && p.open > 0.5).sort((a, b) => a.group.position.distanceTo(camera.position) - b.group.position.distanceTo(camera.position))[0];
 
 // ---------- dock: the worlds, applied to the bubble nearest the middle of the view ----------
-for (const [i, W] of WORLDS.entries()) { const b = document.createElement("button"); b.textContent = W.name; b.dataset.i = i; b.onclick = () => { const P = focusPortal(); if (P && i !== here && !used().has(i)) setWorld(P, i); }; $("worlds").append(b); }
+for (const [i, W] of WORLDS.entries()) { if (W.hidden) continue; const b = document.createElement("button"); b.textContent = W.name; b.dataset.i = i; b.onclick = () => { const P = focusPortal(); if (P && i !== here && !used().has(i)) setWorld(P, i); }; $("worlds").append(b); }
 function focusPortal() { let best = null, bs = -2; for (const P of portals) { const v = P.group.position.clone().sub(camera.position).normalize(), s = v.dot(new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)); if (s > bs) { bs = s; best = P; } } return best; }
 function updateDock() { $("here").textContent = WORLDS[here].name; const F = focusPortal(); for (const b of $("worlds").children) { const i = +b.dataset.i; b.classList.toggle("here", i === here); b.classList.toggle("next", !!F && i === F.w); } }
 
@@ -687,8 +743,8 @@ function enter(P) {
   A = P.B; if (!A.grid) buildGrid(A); setClip(A, false); here = P.w; clearSparks(); setMood(WORLDS[here].id);
   for (const Q2 of [...portals]) removePortal(Q2);
   A.U.bp.value.copy(toLocal(A, pos)); arrive = REDUCED ? null : { t0: performance.now() };
-  flash = 1; title(WORLDS[here].name, "you stepped in"); updateDock();
-  setTimeout(() => { const w = freeWorld(here); if (w !== null && !portals.length) makePortal(w, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.5, -0.2, 0))); }, REDUCED ? 300 : 1500);
+  flash = 1; if (!STORY) title(WORLDS[here].name, "you stepped in"); updateDock();
+  setTimeout(() => { const w = freeWorld(here); if (!STORY && w !== null && !portals.length) makePortal(w, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.5, -0.2, 0))); }, REDUCED ? 300 : 1500);
   evict(); setTimeout(prewarm, 2500);
 }
 function title(t, s) { $("titleT").textContent = t; $("titleS").textContent = s; $("title").classList.add("on"); setTimeout(() => $("title").classList.remove("on"), 1800); }
@@ -701,17 +757,109 @@ $("tourBtn").onclick = () => {
   tour = setInterval(() => { const P = nearest(); if (!P) return; n++; if (n % 3) cycle(P, 1); else { setShape(n % 9 === 0 ? 2 : n % 6 === 0 ? 1 : 0); expandPortal(P); } }, 2600);
 };
 
+function copyCam() {   // for story files: where you stand and what you look at, as JSON
+  const s0 = lookOf(3), r = (v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)];
+  const txt = JSON.stringify({ world: WORLDS[here].id, p: r(s0.p), look: r(s0.look), fov: Math.round(s0.fov) });
+  const show = () => title("Camera copied", txt); navigator.clipboard ? navigator.clipboard.writeText(txt).then(show, show) : show(); console.log(txt);
+}
+// ---------- story: a short, captioned film for social video. ?story, then Play ----------
+const ez = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);
+const pause = (ms, run) => new Promise((r, x) => setTimeout(() => (run === story.run ? r() : x("stopped")), ms));
+const until = (f, run) => new Promise((r, x) => { const c = () => (run !== story.run ? x("stopped") : f() ? r() : setTimeout(c, 50)); c(); });
+function caption(big, small, ms) { const c = $("cap"); c.querySelector("b").textContent = big; c.querySelector("span").textContent = small || ""; c.classList.add("on"); clearTimeout(c.tm); c.tm = setTimeout(() => c.classList.remove("on"), ms); }
+const fadeTo = (o, ms = 900) => { $("fade").style.transition = `opacity ${ms}ms ease`; $("fade").style.opacity = o; };
+function routeOf(w) {   // the capture's walk, smoothed to one point a second, as a curve to glide along
+  if (w.route) return w.route; const S = w.S, pts = [];
+  for (let t = 0.5; t < S.duration_s; t += 1) { const win = S.path.filter((x) => Math.abs(x.t - t) < 1.2); if (win.length) pts.push(win.reduce((a, x) => a.add(V3(x.p)), new THREE.Vector3()).multiplyScalar(1 / win.length)); }
+  return (w.route = new THREE.CatmullRomCurve3(pts));
+}
+function glide(w, a, b, ms, lift = 0.35) {   // a slow dolly along the walk, looking a little ahead and up
+  const C = routeOf(w), t0 = performance.now();
+  return (now) => { const u = a + (b - a) * Math.min(1, (now - t0) / ms), p = C.getPointAt(u).add(new THREE.Vector3(0, lift, 0));
+    return { p, look: C.getPointAt(Math.min(1, u + 0.08)).add(new THREE.Vector3(0, lift + 0.55, 0)), fov: 60 }; };
+}
+function move(from, to, ms, e = ez) {   // a crane or push between two framed shots
+  const t0 = performance.now();
+  return (now) => { const k = e(Math.min(1, (now - t0) / ms)); return { p: from.p.clone().lerp(to.p, k), look: from.look.clone().lerp(to.look, k), fov: from.fov + (to.fov - from.fov) * k }; };
+}
+const lookOf = (d = 5) => ({ p: pos.clone(), look: pos.clone().add(new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pitch, yaw, 0, "YXZ")).multiplyScalar(d)), fov: camera.fov });
+function drift(ms, dyaw, push, rise = 0) {   // from wherever you are: a slow turn with a gentle push
+  const s0 = lookOf(), f0 = s0.look.clone().sub(s0.p).setY(0).normalize(), t0 = performance.now(), y0 = yaw, p0 = pitch;
+  return (now) => { const k = ez(Math.min(1, (now - t0) / ms)), y = y0 + dyaw * k, p = s0.p.clone().addScaledVector(f0, push * k).add(new THREE.Vector3(0, rise * k, 0));
+    return { p, look: p.clone().add(new THREE.Vector3(-Math.sin(y), Math.sin(p0) * 0.6 - 0.02, -Math.cos(y)).multiplyScalar(5)), fov: s0.fov }; };
+}
+async function cutTo(i) {   // change the world you stand in without a portal (an edit cut)
+  const w = await loadWorld(i); for (const Q2 of [...portals]) removePortal(Q2);
+  if (A) { A.U.burst.value = 0; A.U.glowR.value = 0; A.mesh.updateVersion(); }
+  A = w; if (!A.grid) buildGrid(A); setClip(A, false); here = i; clearSparks(); setMood(WORLDS[i].id); updateDock();
+}
+function stopStory() { story.run++; story.cam = null; $("cap").classList.remove("on"); $("endcard").classList.remove("on"); fadeTo(0, 300); }
+function storyKey(e) { if (e.code === "Escape") { stopStory(); document.body.classList.add("storywait"); } if (e.code === "KeyR") playStory(); }
+const EASE = { inout: ez, in: (k) => k * k, out: (k) => 1 - (1 - k) * (1 - k), linear: (k) => k };
+const shotOf = (o) => o && { p: V3(o.p), look: V3(o.look), fov: o.fov ?? 64 };
+function aheadOf(st) {   // a point relative to where you look: ahead, turned, to the side, up
+  const y = yaw + (st.turn ?? 0), f = new THREE.Vector3(-Math.sin(y), 0, -Math.cos(y)), side = st.side ?? 0;
+  return pos.clone().addScaledVector(f, st.ahead ?? 2.8).add(new THREE.Vector3(-f.z * side, st.rise ?? -0.1, f.x * side));
+}
+function camOf(st, named) {
+  const e = EASE[st.ease] || ez, ms = st.ms ?? 3000;
+  switch (st.camera) {
+    case "glide": return A.S ? glide(A, st.from ?? 0, st.to ?? 1, ms, st.lift ?? 0.35) : null;   // along a captured walk (worlds with a scene.json)
+    case "move": return move(shotOf(st.from) || lookOf(), shotOf(st.to), ms, e);
+    case "drift": return drift(ms, st.turn ?? 0, st.push ?? 0, st.rise ?? 0);
+    case "face": case "approach": {   // turn to a bubble, or push in to it
+      const P = named[st.portal], s0 = lookOf(), tgt = P.pos.clone().add(new THREE.Vector3(0, -(st.aimLow ?? 0), 0));
+      const p = st.camera === "face" ? s0.p.clone() : P.pos.clone().addScaledVector(P.pos.clone().sub(s0.p).setY(0).normalize(), -(st.distance ?? 1.5)).setY(s0.p.y);
+      return move(s0, { p, look: tgt, fov: st.fov ?? s0.fov }, ms, e);
+    }
+    case "hold": { const s0 = lookOf(); return () => s0; }
+  }
+  console.warn("story: unknown camera", st.camera); return null;
+}
+const SOUNDS = { crackle: () => { for (let k = 0; k < 6; k++) setTimeout(() => sfxCrackle(1), k * 90); }, wobble: () => sfxWobble(1), whoosh: () => sfxWhoosh(1.2), chime: () => sfxChime(), blip: () => sfxBlip(), swish: () => sfxSwish(0) };
+async function doStep(st, named, run) {   // one step of a story file; "wait" (ms) after any step pauses before the next
+  if (st.cut !== undefined) { const i = WIX(st.cut); if (i < 0) throw new Error("story: no world " + st.cut); await cutTo(i); const s0 = lookOf(); story.cam = () => s0; }
+  else if (st.camera) story.cam = camOf(st, named);
+  else if (st.fade !== undefined) fadeTo(st.fade, st.ms ?? 900);
+  else if (st.caption !== undefined) caption(st.caption, st.small, st.ms ?? 4000);
+  else if (st.sound) SOUNDS[st.sound]?.();
+  else if (st.open) { const P = makePortal(WIX(st.open), st.at ? V3(st.at) : aheadOf(st)); named[st.name || st.open] = P; }
+  else if (st.world) { const P = named[st.in]; if (P) { setWorld(P, WIX(st.world)); sfxBlip(); sfxSwish(0.2); } }
+  else if (st.waitOpen) { const P = named[st.waitOpen]; await until(() => P.B && !P.loading && P.open > 0.9, run); }
+  else if (st.enter) {
+    const P = named[st.enter]; await until(() => P.B && !P.loading, run); story.cam = null; expandPortal(P);
+    await until(() => here === P.w && !busy(), run); const s0 = lookOf(); story.cam = () => s0;
+  }
+  else if (st.end !== undefined) $("endcard").classList.toggle("on", !!st.end);
+}
+async function playStory() {
+  stopStory(); if (!SDEF) return; const run = ++story.run, named = {};
+  document.body.classList.remove("storywait"); document.body.classList.add("story"); document.body.classList.toggle("letterbox", !!(SDEF.letterbox || Q.has("letterbox")));
+  ensureAudio(); fadeTo(1, 10);
+  const ids = new Set(); for (const st of SDEF.steps) for (const k of ["cut", "open", "world"]) if (typeof st[k] === "string") ids.add(st[k]);
+  try {
+    await Promise.all([...ids].map((id) => loadWorld(WIX(id))));   // everything the story needs is decoded before it starts
+    for (const st of SDEF.steps) { await doStep(st, named, run); if (st.wait) await pause(st.wait, run); }
+  } catch (e) { if (e !== "stopped") console.warn(e); }
+}
+if (STORY) {
+  $("playBtn").onclick = playStory;
+  if (SDEF?.end) { const ec = $("endcard"); ec.innerHTML = ""; ec.append(Object.assign(document.createElement("b"), { textContent: SDEF.end.title || "" }), ...(SDEF.end.lines || []).map((l) => Object.assign(document.createElement("span"), { textContent: l }))); }
+  if (!SDEF) { $("playBtn").textContent = `No story at stories/${SNAME}.json`; $("playBtn").disabled = true; }
+}
+
 // ---------- start ----------
 applyQuality(); applyCam();
 const only = Q.has("only") ? +Q.get("only") : null;
 const START = WORLDS.findIndex((w) => w.id === "pavilion"), FIRST = WORLDS.findIndex((w) => w.id === "bay");   // open on the beach at sunset, with the bay in the first bubble
-A = await loadWorld(only ?? START, (f) => ($("loadBar").style.width = `${Math.round(100 * f)}%`)); here = only ?? START; buildGrid(A);
+A = await loadWorld(only ?? (SDEF ? WIX(SDEF.steps.find((x) => x.cut)?.cut) : START), (f) => ($("loadBar").style.width = `${Math.round(100 * f)}%`)); here = only ?? (SDEF ? WIX(SDEF.steps.find((x) => x.cut)?.cut) : START); buildGrid(A);
+if (STORY) { setMood(WORLDS[here].id); document.body.classList.add("story", "storywait"); const c0 = SDEF?.steps.find((x) => x.camera); if (c0 && c0.camera !== "drift") story.cam = camOf({ ...c0, ms: 1, to: c0.from ?? c0.to }, {}); }
 if (Q.has("yaw")) yaw = +Q.get("yaw");
 $("load").classList.add("done"); updateDock();
-if (only === null) setTimeout(() => makePortal(FIRST, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.45, -0.2, 0))), 500);
+if (only === null && !STORY) setTimeout(() => makePortal(FIRST, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.45, -0.2, 0))), 500);
 setTimeout(() => ($("hint").style.opacity = 0), 10000);
 if (Q.has("tour")) setTimeout(() => $("tourBtn").click(), 2500);
-if (only === null) setTimeout(prefetchAll, 6000);
+if (only === null && !STORY) setTimeout(prefetchAll, 6000);
 if (DEBUG) window.__p = { cache, warmList, get here() { return here; }, get QL() { return QL; }, get step() { return step; }, GPU, get AC() { return AC; }, get amb() { return amb; }, get A() { return A; }, portals, makePortal, expandPortal, cycle, setShape, camera, get pos() { return pos; }, set yaw(v) { yaw = v; }, get yaw() { return yaw; }, set pitch(v) { pitch = v; } };
 
 // ---------- quality governor: steps down when frames run slow, and back up when there is room ----------
@@ -788,10 +936,12 @@ renderer.setAnimationLoop((now) => {
     P.mat.uniforms.uOpen.value = Math.max(0, P.open); P.sparkMat.uniforms.uOpen.value = Math.max(0.15, Math.min(P.open, 1.3)); P.mat.uniforms.uT.value = P.sparkMat.uniforms.uT.value = t; P.mat.uniforms.uFlash.value = P.flash * 0.6;
     P.sparkMat.uniforms.uPx.value = res.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   }
+  if (story.cam && !busy()) { const c = story.cam(now), d = c.look.clone().sub(c.p).normalize(), y0 = yaw; pos.copy(c.p); yaw = Math.atan2(-d.x, -d.z); pitch = Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)); fov = c.fov ?? 64;
+    let dy = yaw - y0; dy -= Math.round(dy / 6.2832) * 6.2832; yawVel = dy / Math.max(dt, 1e-3); }
   applyCam();
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   if (arrive && A) { const k = Math.min(1, (now - arrive.t0) / 1900); A.U.burst.value = 0.9 * (1 - ease(k)); A.mesh.updateVersion(); if (k >= 1) { A.U.burst.value = 0; arrive = null; } }
-  if (A) { A.U.t.value = t; const P0 = nearest(); if (P0) { A.U.glowP.value.copy(toLocal(A, P0.pos)); A.U.glowR.value = 0.75 * Math.min(P0.open, 1); } else A.U.glowR.value = 0; if (arrive || (portals.length && frameN % QL.mod === 0)) A.mesh.updateVersion(); }
+  if (A) { A.U.t.value = t; const P0 = nearest(); if (P0) { A.U.glowP.value.copy(toLocal(A, P0.pos)); A.U.glowR.value = 0.75 * Math.min(P0.open, 1); } else A.U.glowR.value = 0; if (arrive || ((portals.length || A.windy) && frameN % QL.mod === 0)) A.mesh.updateVersion(); }
   flash = Math.max(0, flash - dt * 2.2);
   stepSparks(dt); spMat.uniforms.uT.value = t; spMat.uniforms.uPx.value = res.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   { let lvl = 0; for (const P of portals) lvl += Math.min(P.open, 1) / Math.max(1, camera.position.distanceTo(P.pos) ** 2); setHum(Math.min(0.06, lvl * 0.05) + (busy() ? 0.05 : 0)); }

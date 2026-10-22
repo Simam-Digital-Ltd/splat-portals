@@ -1,0 +1,154 @@
+{
+ "title": "Through the bubbles",
+ "end": {
+  "title": "Splat Portals",
+  "lines": [
+   "Open source on GitHub",
+   "github.com/Simam-Digital-Ltd/splat-portals"
+  ]
+ },
+ "steps": [
+  {
+   "cut": "pavilion"
+  },
+  {
+   "camera": "drift",
+   "ms": 11000,
+   "turn": -0.25,
+   "push": 0.6,
+   "rise": 0.05
+  },
+  {
+   "fade": 0,
+   "ms": 1800,
+   "wait": 1200
+  },
+  {
+   "caption": "Sunset on a quiet beach.",
+   "small": "An imagined world",
+   "ms": 4200,
+   "wait": 4400
+  },
+  {
+   "sound": "wobble"
+  },
+  {
+   "sound": "crackle",
+   "wait": 400
+  },
+  {
+   "open": "bay",
+   "name": "first",
+   "ahead": 2.8,
+   "turn": -0.2,
+   "rise": -0.05
+  },
+  {
+   "caption": "Then a bubble appeared.",
+   "ms": 3600
+  },
+  {
+   "waitOpen": "first",
+   "wait": 1500
+  },
+  {
+   "camera": "approach",
+   "portal": "first",
+   "distance": 1.4,
+   "aimLow": 0.2,
+   "ms": 2200,
+   "ease": "in",
+   "wait": 2000
+  },
+  {
+   "caption": "One step,",
+   "ms": 2200
+  },
+  {
+   "enter": "first"
+  },
+  {
+   "camera": "drift",
+   "ms": 9000,
+   "turn": 0.3,
+   "push": 1.2,
+   "rise": 0.2,
+   "wait": 900
+  },
+  {
+   "caption": "and you are somewhere else.",
+   "ms": 3600,
+   "wait": 3200
+  },
+  {
+   "open": "gallery",
+   "name": "next",
+   "ahead": 3,
+   "turn": 0.25,
+   "rise": -0.1
+  },
+  {
+   "waitOpen": "next"
+  },
+  {
+   "caption": "Every world, one step away.",
+   "ms": 4000,
+   "wait": 950
+  },
+  {
+   "world": "church",
+   "in": "next",
+   "wait": 950
+  },
+  {
+   "world": "tombs",
+   "in": "next",
+   "wait": 950
+  },
+  {
+   "world": "bedroom",
+   "in": "next"
+  },
+  {
+   "waitOpen": "next",
+   "wait": 1000
+  },
+  {
+   "camera": "approach",
+   "portal": "next",
+   "distance": 1.4,
+   "ms": 2000,
+   "ease": "in",
+   "wait": 1900
+  },
+  {
+   "enter": "next"
+  },
+  {
+   "camera": "drift",
+   "ms": 12000,
+   "turn": -0.25,
+   "push": 0.8,
+   "wait": 1500
+  },
+  {
+   "caption": "Make your own story with a JSON file.",
+   "small": "stories/your-story.json",
+   "ms": 4200,
+   "wait": 4600
+  },
+  {
+   "end": true
+  },
+  {
+   "fade": 0.55,
+   "ms": 1800,
+   "wait": 4500
+  },
+  {
+   "fade": 1,
+   "ms": 1600,
+   "wait": 1700
+  }
+ ]
+}

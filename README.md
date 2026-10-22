@@ -32,12 +32,83 @@ npx serve .
 | W A S D, Q / E | Walk, and go down and up |
 | Space | Step into the nearest bubble |
 | Walk into a bubble | Go through it |
+| C | Copy where you stand and what you look at, as JSON for a story |
 | Quality button | Auto, or pick Light, Balanced, High or Full yourself |
 
-Add `?tour` to the URL for an automatic tour, `?quality=light` (or `balanced`, `high`, `full`) to fix the quality, and `?stats` to show the frame rate. To use your own worlds, see [worlds/README.md](worlds/README.md).
+Add `?story` to play a short film (see below), `?tour` for an automatic tour, `?quality=light` (or `balanced`, `high`, `full`) to fix the quality, and `?stats` to show the frame rate. To use your own worlds, see [worlds/README.md](worlds/README.md).
+
+## Tell your own story
+
+A story is a JSON file in `stories/`. Open `?story=<name>` to load `stories/<name>.json` (plain `?story` loads `default.json`), then press **Play the story**. The interface hides, captions and fades take over, and the camera follows your script. **R** replays and **Esc** stops. Add `&letterbox` for cinema bars, and record the window with any screen recorder: 1080 × 1920 for Reels and TikTok, 1920 × 1080 for YouTube.
+
+The file is a list of steps, run one after another. Any step can end with `"wait": ms` to pause before the next, which is how a caption lands in the middle of a camera move.
+
+```json
+{
+  "title": "My first story",
+  "end": { "title": "My studio", "lines": ["Made with Splat Portals"] },
+  "steps": [
+    { "cut": "pavilion" },
+    { "camera": "drift", "ms": 10000, "turn": -0.25, "push": 0.6 },
+    { "fade": 0, "ms": 1800, "wait": 1200 },
+    { "caption": "Sunset on a quiet beach.", "small": "An imagined world", "ms": 4200, "wait": 4400 },
+    { "open": "bay", "name": "door", "ahead": 2.8 },
+    { "waitOpen": "door", "wait": 1500 },
+    { "camera": "approach", "portal": "door", "distance": 1.4, "ms": 2200, "ease": "in", "wait": 2000 },
+    { "enter": "door" },
+    { "camera": "drift", "ms": 9000, "turn": 0.3, "push": 1.2, "wait": 4000 },
+    { "end": true },
+    { "fade": 1, "ms": 1600, "wait": 1700 }
+  ]
+}
+```
+
+| Step | What it does | Options |
+|---|---|---|
+| `"cut": id` | Jump to a world, like a film edit. | |
+| `"fade": 0–1` | Fade to or from black (1 is black). | `ms` |
+| `"caption": text` | Show a caption. | `small` (a second line), `ms` |
+| `"camera": "drift"` | Turn and push from wherever you are. | `ms`, `turn` (radians), `push` and `rise` (metres) |
+| `"camera": "move"` | Move between two framed shots. | `from` (optional), `to`: `{ "p": [x, y, z], "look": [x, y, z], "fov": 60 }`, `ms`, `ease` (`inout`, `in`, `out`, `linear`) |
+| `"camera": "glide"` | Glide along a captured walk. Needs a world with a `scene` route. | `from`, `to` (0 to 1 along the walk), `ms`, `lift` |
+| `"camera": "approach"` / `"face"` | Push in to a bubble, or turn to it. | `portal` (its name), `distance`, `aimLow`, `ms`, `ease` |
+| `"camera": "hold"` | Keep still. | |
+| `"open": id` | Open a bubble showing that world. | `name`, then `at: [x, y, z]`, or `ahead`, `turn`, `side`, `rise` relative to the camera |
+| `"waitOpen": name` | Wait until that bubble has loaded and opened. | |
+| `"world": id` | Change the world inside a bubble. | `in` (the bubble's name) |
+| `"enter": name` | Step through that bubble. Waits until you arrive. | |
+| `"sound": name` | `crackle`, `wobble`, `whoosh`, `chime`, `blip` or `swish`. | |
+| `"end": true` | Show the end card from `end`. `false` hides it. | |
+
+**Framing a shot:** explore normally, stand where you want the camera, and press **C**. It copies `{ "world", "p", "look", "fov" }`, which you paste into a `move` step.
+
+A story can also bring worlds of its own in a `worlds` list, in the same shape as `worlds.json`. They play in the story but stay out of the dock.
+
+## Use your own worlds
+
+The worlds are listed in `worlds.json`:
+
+```json
+[
+  { "id": "garden", "name": "My garden", "file": "worlds/garden.sog" },
+  { "id": "street", "name": "High street", "file": "worlds/street.sog", "lite": "worlds/lite/street.sog", "flip": true,
+    "wind": { "spheres": [[3.2, 4.0, -1.5, 5.0, 0.0, 8.0]], "strength": 0.12 } }
+]
+```
+
+| Field | What it's for |
+|---|---|
+| `id`, `name`, `file` | Required. `file` is relative to the page. |
+| `flip` | `true` if the world loads upside down. |
+| `lite` | A small version to show while the full file loads (see below). |
+| `wind` | Makes trees sway. Each sphere is `[x, y, z, radius, groundY, canopyTopY]` in metres, around one tree or a clump. Only green splats inside a sphere move, so walls and signs stay still. Optional: `strength` (metres), `speed`, `gust`, `flutter`, `direction` (radians), `leavesOnly` (`false` to move everything inside). |
+| `mood` | The ambient sound: `{ "root": 146.8, "air": "sea" \| "wind" \| "room", "wave": 0.05, "bright": 900 }`. |
+| `scene`, `bg` | For captured walks: a `scene.json` with a `matrix` (into metres, y up), the walk `path`, and `crop_m`; and a background colour. |
 
 ## What it does beyond the original
 
+- **Stories.** Write a short film as a JSON list of steps (cuts, camera moves, captions, bubbles, stepping in) and play it with `?story`. It's made for recording social videos.
+- **Trees that sway.** Mark the trees with a few spheres and the leaves move in the wind, with gusts and fluttering leaves. The splat file itself is unchanged.
 - **Sparks with real physics.** Thousands of sparks pour off the rim and are simulated in world space: they fall, drift, bounce off the actual walls, beds and floors of the 3D scan, split into smaller sparks when they hit hard, and settle as glowing dust.
 - **A jiggly rim.** The edge is a ring of 40 springs. Moving the bubble, or brushing it with the cursor, sends waves round it, and the view inside ripples with them.
 - **Bubbles behave like bubbles.** Each one sits on a soft spring, so it bobs, sways when you look around, squashes a little as it moves, and drifts back into view when you turn away.
@@ -164,3 +235,4 @@ Measured at 1600×900 on an RTX 4070: 60 fps at every level with one bubble. Wit
 - The eight worlds are AI-generated Gaussian splats made by Simam Digital, shared under the same licence.
 - Libraries: [three.js](https://threejs.org) and [Spark](https://sparkjs.dev), both MIT, loaded from a CDN.
 - Inspired by a portal effect shared by Ian Curtis ([@XRarchitect](https://x.com/XRarchitect)) of World Labs.
+- The wind sway is adapted from Isaac Mason's [making-splats-move](https://github.com/isaac-mason/making-splats-move) (MIT, copyright (c) 2026 Isaac Mason). That was in turn ported from PlayCanvas's [GsplatTrees](https://github.com/playcanvas/engine/pull/9022) (MIT).

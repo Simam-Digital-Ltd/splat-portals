@@ -1,9 +1,9 @@
 # Worlds
 
-Put your Gaussian splat files here, then list them in the `WORLDS` array in `index.html`.
+Put your Gaussian splat files here, then list them in `worlds.json` (see the main README for the fields).
 
 - **Format:** `.sog` loads as written. For `.ply` or `.spz`, change the `fileType` passed to `SplatMesh` in `loadWorld()`, or let Spark detect it from the URL.
-- **Pose:** each world should start at the origin, looking down -z. Many generated worlds already do. If a world comes in upside down, set `flip: true` (or false) on its entry in the `WORLDS` list.
+- **Pose:** each world should start at the origin, looking down -z. Many generated worlds already do. If a world comes in upside down, set `"flip": true` on its entry in `worlds.json`.
 - **Where to get worlds:**
   - export from [SuperSplat](https://superspl.at) or LichtFeld Studio;
   - generate one with a text- or image-to-world tool;

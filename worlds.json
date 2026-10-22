@@ -1,0 +1,74 @@
+[
+ {
+  "id": "pavilion",
+  "name": "Beach pavilion",
+  "file": "worlds/pavilion.sog",
+  "lite": "worlds/lite/pavilion.sog",
+  "wind": {
+   "spheres": [
+    [
+     -15.15,
+     4,
+     5.48,
+     19.32,
+     -1.51,
+     7.77
+    ],
+    [
+     12.14,
+     1.98,
+     20.37,
+     3.32,
+     -1.51,
+     3.71
+    ]
+   ],
+   "strength": 0.1,
+   "speed": 1.3
+  }
+ },
+ {
+  "id": "bay",
+  "name": "Quiet bay",
+  "file": "worlds/bay.sog",
+  "lite": "worlds/lite/bay.sog"
+ },
+ {
+  "id": "gallery",
+  "name": "Sculpture gallery",
+  "file": "worlds/gallery.sog",
+  "lite": "worlds/lite/gallery.sog"
+ },
+ {
+  "id": "bedroom",
+  "name": "Sunlit bedroom",
+  "file": "worlds/bedroom.sog",
+  "lite": "worlds/lite/bedroom.sog",
+  "flip": true
+ },
+ {
+  "id": "church",
+  "name": "Old church",
+  "file": "worlds/church.sog",
+  "lite": "worlds/lite/church.sog",
+  "flip": true
+ },
+ {
+  "id": "rock-tomb",
+  "name": "Rock-cut tomb",
+  "file": "worlds/rock-tomb.sog",
+  "lite": "worlds/lite/rock-tomb.sog"
+ },
+ {
+  "id": "tombs",
+  "name": "Desert tombs",
+  "file": "worlds/tombs.sog",
+  "lite": "worlds/lite/tombs.sog"
+ },
+ {
+  "id": "pyramids",
+  "name": "Pyramids",
+  "file": "worlds/pyramids.sog",
+  "lite": "worlds/lite/pyramids.sog"
+ }
+]
