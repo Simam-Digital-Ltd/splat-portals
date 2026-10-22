@@ -88,16 +88,16 @@ const $ = (id) => document.getElementById(id);
 const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 
 // ---------- the worlds (AI-generated Gaussian splats). flip: stored y-down, so turn it the right way up ----------
-const WORLDS = [
-  { id: "bedroom", name: "Sunlit bedroom", file: "worlds/bedroom.sog", flip: true },
+const WORLDS = [   // lite: a smaller version (no view-dependent colour, 30% of the splats) shown while the full file downloads
   { id: "pavilion", name: "Beach pavilion", file: "worlds/pavilion.sog", flip: false },
-  { id: "gallery", name: "Sculpture gallery", file: "worlds/gallery.sog", flip: false },
-  { id: "tombs", name: "Desert tombs", file: "worlds/tombs.sog", flip: false },
-  { id: "church", name: "Old church", file: "worlds/church.sog", flip: true },
-  { id: "pyramids", name: "Pyramids", file: "worlds/pyramids.sog", flip: false },
-  { id: "rock-tomb", name: "Rock-cut tomb", file: "worlds/rock-tomb.sog", flip: false },
   { id: "bay", name: "Quiet bay", file: "worlds/bay.sog", flip: false },
-];
+  { id: "gallery", name: "Sculpture gallery", file: "worlds/gallery.sog", flip: false },
+  { id: "bedroom", name: "Sunlit bedroom", file: "worlds/bedroom.sog", flip: true },
+  { id: "church", name: "Old church", file: "worlds/church.sog", flip: true },
+  { id: "rock-tomb", name: "Rock-cut tomb", file: "worlds/rock-tomb.sog", flip: false },
+  { id: "tombs", name: "Desert tombs", file: "worlds/tombs.sog", flip: false },
+  { id: "pyramids", name: "Pyramids", file: "worlds/pyramids.sog", flip: false },
+].map((w) => ({ ...w, lite: w.file.replace("worlds/", "worlds/lite/") }));
 if (Q.has("flips")) Q.get("flips").split("").forEach((c, i) => WORLDS[i] && (WORLDS[i].flip = c === "1"));
 
 // ---------- renderer ----------
@@ -154,11 +154,34 @@ async function fetchBytes(url, onProg) {
   for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); got += value.length; onProg?.(n ? got / n : 0); }
   const o = new Uint8Array(got); let k = 0; for (const p of parts) { o.set(p, k); k += p.length; } return o;
 }
-function loadWorld(i, onProg) {
+function loadWorld(i, onProg) {   // the light version first, unless the full file is already on disk; the full one swaps in behind it
   if (cache.has(i)) return cache.get(i);
-  const p = (async () => {
+  const W = WORLDS[i], p = (async () => {
+    if (!W.lite || (await stored(BASE + W.file))) return buildWorld(i, W.file, onProg);
+    const rec = await buildWorld(i, W.lite, onProg); rec.lite = true; if (step > 0) queueUpgrade(i, rec); return rec;   // Light quality keeps the light version
+  })();
+  cache.set(i, p); return p;
+}
+const stored = async (url) => { const st = await openStore(); return !!(st && (await st.match(url).catch(() => null))); };
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const upgrading = new Set(); let upQ = Promise.resolve();
+function queueUpgrade(i, lite) { upgrading.add(i); upQ = upQ.then(() => upgrade(i, lite)).finally(() => upgrading.delete(i)); }
+async function upgrade(i, lite) {   // one at a time, in the order the worlds were opened
+  try {
+    if ((await cache.get(i)) !== lite) return;   // already gone
+    const full = await buildWorld(i, WORLDS[i].file);
+    while (busy()) await wait(300);   // never swap mid-transition
+    if (!cache.has(i) || (await cache.get(i)) !== lite) { scrap(full); return; }
+    cache.set(i, Promise.resolve(full)); full.grid = lite.grid; full.U.bp.value.copy(lite.U.bp.value);
+    if (A === lite) A = full;
+    for (const P of portals) if (P.B === lite) { P.B = full; setClip(full, true); }
+    scrap(lite);
+  } catch (e) { console.warn("upgrade", e); }
+}
+function scrap(w) { try { w.mesh.dispose?.(); w.spark.dispose?.(); } catch {} }
+async function buildWorld(i, file, onProg) {
     const W = WORLDS[i], scene = new THREE.Scene(); scene.background = new THREE.Color(0x06040c); const spark = new SparkRenderer({ renderer }); scene.add(spark);
-    const mesh = new SplatMesh({ fileBytes: await fetchBytes(BASE + W.file, onProg), fileType: "pcsogszip" });
+    const mesh = new SplatMesh({ fileBytes: await fetchBytes(BASE + file, onProg), fileType: "pcsogszip" });
     await mesh.initialized;
     if (W.flip) mesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
     const U = { clip: dyno.dynoVec4(new THREE.Vector4(0, 0, 0, -1e9)), burst: dyno.dynoFloat(0), bp: dyno.dynoVec3(new THREE.Vector3()), glowP: dyno.dynoVec3(new THREE.Vector3(1e9, 0, 0)), glowR: dyno.dynoFloat(0), t: dyno.dynoFloat(0) };
@@ -186,8 +209,6 @@ function loadWorld(i, onProg) {
     mesh.updateGenerator(); scene.add(mesh); scene.updateMatrixWorld(true);
     const rec = { i, scene, spark, mesh, U }; tuneSpark(rec);
     quietUntil = performance.now() + 1500; return rec;   // the collision grid is built only when you enter the world
-  })();
-  cache.set(i, p); return p;
 }
 // solid space: a 12 cm voxel grid of the world's opaque, small splats (so sparks can hit walls, beds and floors)
 const GC = 0.12, GNX = 240, GNY = 92, GNZ = 240, GX0 = -14.4, GY0 = -4.4, GZ0 = -14.4;
@@ -227,7 +248,7 @@ async function prefetchAll() {   // then download every other world into cache s
     const url = BASE + WORLDS[i].file;
     try {
       if (await store.match(url)) continue;
-      while (portals.some((p) => p.loading) || busy()) await new Promise((r) => setTimeout(r, 1000));
+      while (portals.some((p) => p.loading) || busy() || upgrading.size) await wait(1000);
       const r = await fetch(url); if (r.ok) await store.put(url, r);
       await new Promise((r) => setTimeout(r, 600));
     } catch { return; }   // storage full or offline: stop quietly
@@ -237,7 +258,7 @@ async function evict() {   // keep the GPU light: the world you are in, the bubb
   const keep = new Set([here, ...portals.map((p) => p.w), ...warmList()]);
   for (const [i, pr] of [...cache]) {
     if (keep.has(i)) continue;
-    cache.delete(i); try { const w = await pr; w.mesh.dispose?.(); w.spark.dispose?.(); } catch {}
+    cache.delete(i); try { scrap(await pr); } catch {}
   }
 }
 function setClip(w, on) {   // seen through a bubble: hide what lies between the far camera and the far portal (world z > 0)
