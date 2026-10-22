@@ -102,12 +102,14 @@ The worlds are listed in `worlds.json`:
 | `flip` | `true` if the world loads upside down. |
 | `lite` | A small version to show while the full file loads (see below). |
 | `wind` | Makes trees sway. Each sphere is `[x, y, z, radius, groundY, canopyTopY]` in metres, around one tree or a clump. Only green splats inside a sphere move, so walls and signs stay still. Optional: `strength` (metres), `speed`, `gust`, `flutter`, `direction` (radians), `leavesOnly` (`false` to move everything inside). |
+| `grade` | Brightens or warms a world without touching the file: `{ "exposure": 0.45, "shadows": 0.4, "warmth": 0.2, "saturation": 0.95 }`. Exposure is in stops; highlights roll off softly, so nothing clips. |
 | `mood` | The ambient sound: `{ "root": 146.8, "air": "sea" \| "wind" \| "room", "wave": 0.05, "bright": 900 }`. |
 | `scene`, `bg` | For captured walks: a `scene.json` with a `matrix` (into metres, y up), the walk `path`, and `crop_m`; and a background colour. |
 
 ## What it does beyond the original
 
 - **Stories.** Write a short film as a JSON list of steps (cuts, camera moves, captions, bubbles, stepping in) and play it with `?story`. It's made for recording social videos.
+- **Brighter worlds.** Each world can carry its own grade (exposure, shadow lift, warmth, saturation) applied in the splat shader, and the picture gets light sharpening for clarity.
 - **Trees that sway.** Mark the trees with a few spheres and the leaves move in the wind, with gusts and fluttering leaves. The splat file itself is unchanged.
 - **Sparks with real physics.** Thousands of sparks pour off the rim and are simulated in world space: they fall, drift, bounce off the actual walls, beds and floors of the 3D scan, split into smaller sparks when they hit hard, and settle as glowing dust.
 - **A jiggly rim.** The edge is a ring of 40 springs. Moving the bubble, or brushing it with the cursor, sends waves round it, and the view inside ripples with them.
