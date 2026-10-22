@@ -117,7 +117,7 @@ The worlds are listed in `worlds.json`:
 - **Several bubbles at once,** each a window into a different world.
 - **Three shapes:** an organic blob (the default), a round soap bubble, and a doorway with a ragged white-hot rim.
 - **Bubbles bend light.** The view inside warps near the edge, like looking through a real soap film.
-- **Soap bubbles and sparkles** drift off the rim; some sparkles fall and settle on the floor.
+- **Wisps, bubbles and dust.** Soft wisps curl off the rim like smoke, with the odd soap bubble, and fine dust drifts through every world, tinted to its light (gold indoors and in the desert, pale on the coast). Set `"dust": 0–1` on a world to change how much.
 - **Worlds break up and form.** The world you leave scatters; the one you arrive in assembles out of a violet mist.
 - **Walk through, too.** Walk up to a bubble and through it, with the keys or by holding still on a phone. Bubbles stay put while you walk towards them, and only drift back into view when you turn away.
 - **A calm soundscape made in the browser.** Each world has its own slow ambient chords and air: the sea on the beach, wind in the desert, a low, dark room in the church. The bubbles whoosh as they move, panned to where they are, and you hear crackles as sparks hit, a wobble, chimes and a rush as you step through. There are no audio files.
@@ -186,7 +186,7 @@ All synthesised with Web Audio, with no audio files. Everything goes through one
 
 - **Ambient bed:** five soft voices play slow major-ninth chords, changing every 13 seconds, through a slowly moving low-pass filter. Underneath is filtered pink noise that swells like waves or wind. Each world sets its own key, brightness and kind of air. Now and then a quiet bell from the current chord sounds off to one side.
 - **Movement:** a looping noise band whose loudness and pitch follow the fastest bubble's speed, plus how fast you turn and walk. It is panned to where that bubble is on screen.
-- **Events:** a hum near bubbles, crackles when sparks hit (panned), a wobble when the rim is poked, a chime when a bubble opens, a blip and a swish when it changes world, and a long rush when you step in.
+- **Events:** a hum near bubbles, a wobble when the rim is poked, a chime when a bubble opens, a blip and a swish when it changes world, and a long rush when you step in.
 
 It starts on your first click or key press, pauses when the tab is hidden, and the top bar mutes it.
 

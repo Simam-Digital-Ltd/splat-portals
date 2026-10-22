@@ -383,23 +383,23 @@ const SPARK_VS = `
     vec2 b = vec2(0.62, 0.98); vec2 d = vec2(cos(a), sin(a)); float s = min(b.x / max(abs(d.x), 1e-3), b.y / max(abs(d.y), 1e-3)); return d * s;
   }
   void main() {
-    float bubble = 1.0;   // a few soap bubbles drift away, the rest are sparkles
-    float life = mix(1.6 + seed.y * 2.2, 3.5 + seed.y * 3.0, bubble), t = fract(uT / life + seed.x);
+    float bubble = step(0.78, seed.w);   // a few soap bubbles; the rest are soft wisps
+    float life = mix(3.0 + seed.y * 3.0, 3.5 + seed.y * 3.0, bubble), t = fract(uT / life + seed.x);
     float a = seed.z * 6.2831 + uT * (0.35 + seed.w * 0.6) * (seed.w > 0.5 ? 1.0 : -1.0);
     vec2 r = rim(a) * min(uOpen, 1.4);
     vec3 p;
     if (bubble > 0.5) { p = vec3(r * (1.0 + t * 0.4), (seed.y - 0.5) * 0.4 + t * 0.5); p.y += t * (0.5 + seed.x * 0.8); p.x += sin(uT * 1.3 + seed.z * 20.0) * 0.08 * t; }
     else {
-      vec2 out2 = normalize(r + 1e-4) * (0.04 + 0.5 * t * seed.w);
-      p = vec3(r + out2, (seed.y - 0.5) * 0.16 + t * (seed.x - 0.5) * 0.6);
-      float spill = step(0.64, seed.w); p.y -= spill * t * t * 2.6; p.y = max(p.y, uFloor + 0.01 * seed.z); p.xz += spill * vec2(seed.z - 0.5, seed.x - 0.5) * t * 0.9;
+      float a2 = a + t * (seed.y - 0.5) * 2.5; vec2 d2 = vec2(cos(a2), sin(a2));   // wisps curl outward and rise, like smoke off the rim
+      p = vec3(r * (1.0 + t * (0.25 + 0.5 * seed.w)) + d2 * 0.12 * sin(t * 6.0 + seed.x * 30.0), (seed.y - 0.5) * 0.3 + sin(uT * 0.7 + seed.z * 9.0) * 0.08);
+      p.y += t * t * (0.35 + 0.5 * seed.x);
     }
     vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
-    float tw = mix(0.55 + 0.45 * sin(uT * (9.0 + seed.y * 14.0) + seed.x * 40.0), 1.0, bubble);
+    float tw = mix(0.45 * (0.8 + 0.2 * sin(uT * 1.7 + seed.x * 40.0)), 1.0, bubble);   // wisps are faint and steady
     vA = (1.0 - t) * smoothstep(0.0, 0.08, t) * tw * min(uOpen * 1.5, 1.0) * (1.0 + uBoost); vKind = bubble;
-    vC = mix(vec3(1.0, 0.45, 0.95), vec3(0.6, 0.85, 1.0), seed.z); vC = mix(vC, vec3(1.0), step(0.8, seed.y));
-    float sz = mix(0.010 + 0.022 * seed.y, 0.05 + 0.09 * seed.y, bubble);
-    gl_PointSize = clamp(sz * (1.0 + uBoost * 1.5) * uPx / -mv.z, 1.0, mix(14.0, 64.0, bubble));
+    vC = mix(vec3(1.0, 0.45, 0.95), vec3(0.6, 0.85, 1.0), seed.z); vC = mix(vC, vec3(1.0), 0.45);
+    float sz = mix(0.06 + 0.1 * seed.y, 0.05 + 0.09 * seed.y, bubble);
+    gl_PointSize = clamp(sz * (1.0 + uBoost * 1.5) * uPx / -mv.z, 1.0, mix(48.0, 64.0, bubble));
   }`;
 const SPARK_FS = `varying float vA, vKind; varying vec3 vC;
   void main() { vec2 d = gl_PointCoord - 0.5; float r = length(d) * 2.0; if (r > 1.0) discard;
@@ -407,7 +407,7 @@ const SPARK_FS = `varying float vA, vKind; varying vec3 vC;
       vec3 film = 0.55 + 0.45 * cos(6.2831 * (ang / 6.2831 + r + vec3(0.0, 0.33, 0.67)));
       vec2 hl = d - vec2(-0.18, 0.18); float spec = exp(-dot(hl, hl) * 160.0);
       gl_FragColor = vec4((film * ring * 0.9 + vec3(1.0) * spec * 0.9 + film * 0.06) * vA, 1.0); return; }
-    float q = r * r; gl_FragColor = vec4(vC * (exp(-q * 6.0) + 0.25 * exp(-q * 1.5)) * vA, 1.0); }`;
+    float q = r * r; gl_FragColor = vec4(vC * exp(-q * 3.2) * vA, 1.0); }`;
 const NS = REDUCED ? 30 : PHONE ? 60 : 110;
 const seeds = new Float32Array(NS * 4); for (let i = 0; i < NS * 4; i++) seeds[i] = Math.random();
 const sparkGeo = new THREE.BufferGeometry(); sparkGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(NS * 3), 3)); sparkGeo.setAttribute("seed", new THREE.BufferAttribute(seeds, 4));
@@ -463,6 +463,21 @@ const spMat = new THREE.ShaderMaterial({ transparent: true, depthTest: false, de
       vA = alpha * (0.65 + 0.35 * sin(uT * (11.0 + seed * 17.0) + seed * 60.0)); vC = col; gl_PointSize = alpha > 0.0 ? clamp(size * uPx / -mv.z, 1.5, 22.0) : 0.0; }`,
   fragmentShader: `varying vec3 vC; varying float vA; void main() { vec2 d = gl_PointCoord - 0.5; float q = dot(d, d) * 4.0; if (q > 1.0) discard; gl_FragColor = vec4(vC * (exp(-q * 6.0) * 1.6 + 0.45 * exp(-q * 1.6)) * vA, 1.0); }` });
 const sparkPts = new THREE.Points(spGeo, spMat); sparkPts.frustumCulled = false; sparkPts.renderOrder = 3; fx.add(sparkPts);
+const ND = REDUCED ? 150 : PHONE ? 350 : 800, dSeed = new Float32Array(ND * 4); for (let i = 0; i < ND * 4; i++) dSeed[i] = Math.random();
+const dustGeo = new THREE.BufferGeometry(); dustGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(ND * 3), 3)); dustGeo.setAttribute("seed", new THREE.BufferAttribute(dSeed, 4));
+const dustMat = new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uT: { value: 0 }, uPx: { value: 800 }, uCam: { value: new THREE.Vector3() }, uTint: { value: new THREE.Color(1, 0.88, 0.7) }, uAmt: { value: 0.75 } },
+  vertexShader: `attribute vec4 seed; uniform float uT, uPx, uAmt; uniform vec3 uCam, uTint; varying float vA; varying vec3 vC;
+    void main() { const float B = 8.0;
+      vec3 q = seed.xyz * B + vec3(sin(uT * 0.11 + seed.w * 20.0) * 0.6 + uT * 0.05, sin(uT * 0.07 + seed.x * 13.0) * 0.4 + uT * 0.02, cos(uT * 0.09 + seed.y * 17.0) * 0.6);
+      vec3 p = uCam + mod(q - uCam + B * 0.5, B) - B * 0.5;   // the box wraps round you, so the air is never empty
+      vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv; float d = -mv.z;
+      vA = uAmt * smoothstep(0.3, 1.2, d) * (1.0 - smoothstep(B * 0.35, B * 0.5, length(p - uCam))) * (0.45 + 0.55 * sin(uT * (0.8 + seed.w * 1.7) + seed.x * 50.0));
+      vC = uTint; gl_PointSize = d > 0.0 ? clamp((0.018 + 0.03 * seed.w) * uPx / d, 1.2, 12.0) : 0.0; }`,
+  fragmentShader: `varying float vA; varying vec3 vC; void main() { vec2 d = gl_PointCoord - 0.5; float q = dot(d, d) * 4.0; if (q > 1.0) discard; gl_FragColor = vec4(vC * exp(-q * 4.0) * max(vA, 0.0), 1.0); }` });
+const dust = new THREE.Points(dustGeo, dustMat); dust.frustumCulled = false; dust.renderOrder = 0; fx.add(dust);
+const DUST_TINT = { sea: [0.82, 0.93, 1], wind: [1, 0.84, 0.6], room: [1, 0.88, 0.7] };
+let dustFor = -1;
 const PAL = [[1, 0.5, 0.92], [0.78, 0.52, 1], [1, 1, 1], [0.58, 0.86, 1], [1, 0.82, 0.55]];
 function spawn(x, y, z, vx, vy, vz, life, size, heavy, gen = 0) {
   let i = sp.head; for (let k = 0; k < 24 && sp.state[i] !== 0; k++) i = (i + 1) % NP; sp.head = (i + 1) % NP;
@@ -510,7 +525,6 @@ function stepSparks(dt) {
     const age = sp.max[i] - sp.life[i]; aA.array[i] = Math.min(1, age * 8) * Math.min(1, sp.life[i] / (st === 2 ? 1.2 : 0.6)) * (st === 2 ? 0.7 : 1);
   }
   aPos.needsUpdate = aCol.needsUpdate = aA.needsUpdate = aS.needsUpdate = true;
-  if (hitsThisFrame) sfxCrackle(Math.min(1, hitsThisFrame / 30));
 }
 function clearSparks() { sp.state.fill(0); aA.array.fill(0); aA.needsUpdate = true; }
 // rim springs: inertia when the bubble moves, waves round the ring, and pokes from the cursor
@@ -663,6 +677,12 @@ function ensureAudio() {
   startAmbient(); startSwoosh();
 }
 function setHum(level) { if (hum && AC) hum.gain.setTargetAtTime(soundOn ? level : 0, AC.currentTime, 0.25); }
+function sfxShimmer() {   // a soft, airy shimmer as a bubble is about to open
+  if (!soundOn || !bus) return; const c = AC, t = c.currentTime, n = c.createBufferSource(); n.buffer = white(); n.loop = true;
+  const f = c.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 6; f.frequency.setValueAtTime(5200, t); f.frequency.exponentialRampToValueAtTime(8200, t + 1.2);
+  const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05, t + 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+  n.connect(f).connect(g); panned(g, 0, 0.8); n.start(t, Math.random()); n.stop(t + 1.7);
+}
 function sfxCrackle(k) {
   if (!soundOn || !bus || performance.now() - lastCrackle < 45) return; lastCrackle = performance.now(); const c = AC, t = c.currentTime, len = 0.02 + Math.random() * 0.03;
   const b = c.createBuffer(1, Math.ceil(c.sampleRate * len), c.sampleRate), dd = b.getChannelData(0); for (let i = 0; i < dd.length; i++) dd[i] = (Math.random() * 2 - 1) * (1 - i / dd.length);
@@ -827,7 +847,7 @@ function camOf(st, named) {
   }
   console.warn("story: unknown camera", st.camera); return null;
 }
-const SOUNDS = { crackle: () => { for (let k = 0; k < 6; k++) setTimeout(() => sfxCrackle(1), k * 90); }, wobble: () => sfxWobble(1), whoosh: () => sfxWhoosh(1.2), chime: () => sfxChime(), blip: () => sfxBlip(), swish: () => sfxSwish(0) };
+const SOUNDS = { crackle: () => sfxShimmer(), shimmer: () => sfxShimmer(), wobble: () => sfxWobble(1), whoosh: () => sfxWhoosh(1.2), chime: () => sfxChime(), blip: () => sfxBlip(), swish: () => sfxSwish(0) };
 async function doStep(st, named, run) {   // one step of a story file; "wait" (ms) after any step pauses before the next
   if (st.cut !== undefined) { const i = WIX(st.cut); if (i < 0) throw new Error("story: no world " + st.cut); await cutTo(i); const s0 = lookOf(); story.cam = () => s0; }
   else if (st.camera) story.cam = camOf(st, named);
@@ -954,6 +974,8 @@ renderer.setAnimationLoop((now) => {
   if (arrive && A) { const k = Math.min(1, (now - arrive.t0) / 1900); A.U.burst.value = 0.9 * (1 - ease(k)); A.mesh.updateVersion(); if (k >= 1) { A.U.burst.value = 0; arrive = null; } }
   if (A) { A.U.t.value = t; const P0 = nearest(); if (P0) { A.U.glowP.value.copy(toLocal(A, P0.pos)); A.U.glowR.value = 0.75 * Math.min(P0.open, 1); } else A.U.glowR.value = 0; if (arrive || ((portals.length || A.windy) && frameN % QL.mod === 0)) A.mesh.updateVersion(); }
   flash = Math.max(0, flash - dt * 2.2);
+  if (dustFor !== here) { dustFor = here; const W0 = WORLDS[here], m = MOODS[W0.id] || W0.mood || MOODS.bedroom; dustMat.uniforms.uTint.value.setRGB(...(DUST_TINT[m.air] || DUST_TINT.room)); dustMat.uniforms.uAmt.value = W0.dust ?? 0.75; }
+  dustMat.uniforms.uT.value = t; dustMat.uniforms.uCam.value.copy(camera.position); dustMat.uniforms.uPx.value = res.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   stepSparks(dt); spMat.uniforms.uT.value = t; spMat.uniforms.uPx.value = res.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   { let lvl = 0; for (const P of portals) lvl += Math.min(P.open, 1) / Math.max(1, camera.position.distanceTo(P.pos) ** 2); setHum(Math.min(0.06, lvl * 0.05) + (busy() ? 0.05 : 0)); }
   if (swoosh) { let best = 0, pan = 0; for (const P of portals) { const v = P.vel.length(); if (v > best) { best = v; pan = P.pos.clone().project(camera).x; } }
