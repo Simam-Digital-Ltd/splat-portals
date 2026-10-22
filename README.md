@@ -12,19 +12,29 @@ A soap-bubble or doorway portal floats in front of you. Through it you see a dif
 |---|---|
 | ![A doorway portal with a ragged glowing rim](docs/doorway.jpg) | ![Radial motion blur during the jump](docs/jump.jpg) |
 
-Built by [Simam Digital](https://www.simamdigital.com) in one sitting, after seeing a portal effect posted by [@XRarchitect](https://x.com/XRarchitect). One HTML file, no build step, MIT licence.
+Inspired by a portal effect shared by **Ian Curtis ([@XRarchitect](https://x.com/XRarchitect)) of World Labs**. Built by [Simam Digital](https://www.simamdigital.com) in one sitting: one HTML file, no build step, MIT licence.
+
+## What it adds
+
+- **Two-sided portals.** Walk round the back of a portal and you see the other world from the other side, as if the two worlds really were joined there.
+- **Put a portal anywhere.** Click a wall or the floor and a portal opens on that spot.
+- **A bubble that bends light.** The view inside the bubble warps near its edge, like looking through a real soap bubble, and the bubble bobs gently in the air.
+- **A motion-blur jump.** Radial blur, a colour split and a lens kick as you cross.
+- **Worlds that break up and form.** The world you leave scatters into sparkles; the world you arrive in assembles out of a violet mist.
+- **A rim that lights the room.** Splats near the portal pick up a violet shimmer.
+- **Sound, made in the browser.** A whoosh when you jump and a chime when a portal opens, with no audio files.
 
 ## Run it
 
-1. Put some Gaussian splat files in `worlds/` (see [worlds/README.md](worlds/README.md)).
-2. Edit the `WORLDS` list near the top of the script in `index.html` so it names your files.
-3. Serve the folder with any static server and open it:
+Seven worlds are included in `worlds/`, so it runs straight away. Serve the folder with any static server and open it:
 
 ```bash
 npx serve .
 ```
 
-Controls: drag to look, **W A S D** to walk, **Q / E** down and up, **Space** to step through, **1 to 7** to pick the next world. Add `?tour` to the URL for an automatic tour, or `?shape=door` to start with the doorway.
+Controls: drag to look, **W A S D** to walk, **Q / E** down and up, **click** a surface to open a portal there, **Space** to step through, **1 to 7** to pick the next world. Add `?tour` to the URL for an automatic tour, or `?shape=door` to start with the doorway.
+
+To use your own worlds, put the files in `worlds/` and edit the `WORLDS` list near the top of the script in `index.html` (see [worlds/README.md](worlds/README.md)).
 
 ## How it works
 
@@ -65,6 +75,8 @@ The sparkles are about 3,400 GPU points with no CPU work. Each point's whole lif
 
 Splats in your own world that sit close to the portal ring get a violet shimmer from the same per-splat shader, so the portal seems to light the room around it.
 
+The portal is two-sided. When you walk behind it, the clip plane in the next world flips, so you see that world from the other side. Inside the bubble, the screen position used to sample the other world is pushed outward near the edge, which gives a soft lens bend.
+
 ### 4. Going through
 
 Each frame, your position is converted into the portal's local space. When it crosses the portal plane inside the opening (going from in front to behind), the worlds swap:
@@ -102,5 +114,5 @@ The blur and a field-of-view kick (70 to 96 degrees) both peak as you cross. The
 
 - Code: MIT, see [LICENSE](LICENSE). Built by Simam Digital Ltd.
 - Libraries: [three.js](https://threejs.org) (MIT) and [Spark](https://sparkjs.dev) (MIT), loaded from a CDN.
-- The worlds in the live demo are AI-generated splats and are not part of this repository.
-- Inspired by a portal effect shared by [@XRarchitect](https://x.com/XRarchitect).
+- The seven worlds are AI-generated Gaussian splats made by Simam Digital, shared under the same MIT licence.
+- Inspired by a portal effect shared by Ian Curtis ([@XRarchitect](https://x.com/XRarchitect)) of World Labs.
