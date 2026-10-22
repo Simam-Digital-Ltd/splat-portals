@@ -16,7 +16,7 @@ Inspired by a portal effect shared by **Ian Curtis ([@XRarchitect](https://x.com
 
 ## Run it
 
-Eight worlds are included in `worlds/`, so it runs straight away. Serve the folder with any static server and open it:
+Nine worlds are included in `worlds/`, so it runs straight away. Serve the folder with any static server and open it:
 
 ```bash
 npx serve .
@@ -234,7 +234,7 @@ Measured at 1600×900 on an RTX 4070: 60 fps at every level with one bubble. Wit
 ## Credits and licence
 
 - Code: MIT, see [LICENSE](LICENSE). Built by Simam Digital Ltd.
-- The eight worlds are AI-generated Gaussian splats made by Simam Digital, shared under the same licence.
+- The nine worlds are AI-generated Gaussian splats made by Simam Digital, shared under the same licence.
 - Libraries: [three.js](https://threejs.org) and [Spark](https://sparkjs.dev), both MIT, loaded from a CDN.
 - Inspired by a portal effect shared by Ian Curtis ([@XRarchitect](https://x.com/XRarchitect)) of World Labs.
 - The wind sway is adapted from Isaac Mason's [making-splats-move](https://github.com/isaac-mason/making-splats-move) (MIT, copyright (c) 2026 Isaac Mason). That was in turn ported from PlayCanvas's [GsplatTrees](https://github.com/playcanvas/engine/pull/9022) (MIT).

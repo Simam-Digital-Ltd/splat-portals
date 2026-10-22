@@ -81,7 +81,7 @@
    "wait": 3200
   },
   {
-   "open": "gallery",
+   "open": "cafe",
    "name": "next",
    "ahead": 3,
    "turn": 0.25,
@@ -96,17 +96,17 @@
    "wait": 950
   },
   {
-   "world": "church",
+   "world": "christmas",
    "in": "next",
    "wait": 950
   },
   {
-   "world": "tombs",
+   "world": "pub",
    "in": "next",
    "wait": 950
   },
   {
-   "world": "bedroom",
+   "world": "mystic-forest",
    "in": "next"
   },
   {
