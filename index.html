@@ -84,7 +84,7 @@ body.storywait #playbox { display: grid; }
   <b>Splat Portals<span> · Simam Digital</span></b>
   <span class="where">You are in <i id="here">…</i></span>
   <div class="grow"></div>
-  <button class="btn on" data-shape="0">Blob</button><button class="btn" data-shape="1">Bubble</button><button class="btn" data-shape="2">Doorway</button>
+  <button class="btn on" id="shapeBtn" title="Portal shape: click for the next one">Shape: Blob</button>
   <button class="btn" id="tourBtn">Auto tour</button>
   <button class="btn on" id="soundBtn" aria-pressed="true">Sound on</button>
   <button class="btn" id="qBtn" title="Picture quality. Auto adapts to this device.">Auto</button>
@@ -333,7 +333,7 @@ const toLocal = (w, v) => v.clone().applyMatrix4(w.mesh.matrixWorld.clone().inve
 
 // ---------- shaders shared by every bubble ----------
 const PORTAL_FS = `
-  uniform sampler2D tB; uniform vec2 uRes; uniform float uT, uOpen, uShape, uLoading, uSeed, uFlash, uJig; uniform float uRing[40]; varying vec2 vP;
+  uniform sampler2D tB; uniform vec2 uRes; uniform float uT, uOpen, uShape, uLoading, uSeed, uFlash, uJig, uDraw, uStart; uniform float uRing[40]; varying vec2 vP;
   float ringAt(float ang) { float f = (ang / 6.2831853 + 0.5) * 40.0, fl = floor(f); int i0 = int(mod(fl, 40.0)), i1 = int(mod(fl + 1.0, 40.0)); float t = f - fl; t = t * t * (3.0 - 2.0 * t); return mix(uRing[i0], uRing[i1], t); }
   float h(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
   float n3(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -341,20 +341,40 @@ const PORTAL_FS = `
                mix(mix(h(i + vec3(0,0,1)), h(i + vec3(1,0,1)), f.x), mix(h(i + vec3(0,1,1)), h(i + vec3(1,1,1)), f.x), f.y), f.z); }
   float fbm(vec3 p) { return 0.55 * n3(p) + 0.3 * n3(p * 2.1) + 0.15 * n3(p * 4.3); }
   float sdBox(vec2 p, vec2 b, float r) { vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+  float sdTri(vec2 p, float r) { const float k = 1.7320508; p.x = abs(p.x) - r; p.y = p.y + r / k; if (p.x + k * p.y > 0.0) p = vec2(p.x - k * p.y, -k * p.x - p.y) / 2.0; p.x -= clamp(p.x, -2.0 * r, 0.0); return -length(p) * sign(p.y); }
+  float sdShape(vec2 p) {   // the sorcerer shapes at unit size: ring, square, triangle, door, diamond (spiral ends as a ring)
+    if (uShape < 3.5 || uShape > 7.5) return length(p) - 0.72;
+    if (uShape < 4.5) return sdBox(p, vec2(0.62), 0.04);
+    if (uShape < 5.5) return sdTri(p, 0.69);
+    if (uShape < 6.5) return sdBox(p, vec2(0.5, 0.95), 0.06);
+    return sdBox(mat2(0.7071, -0.7071, 0.7071, 0.7071) * p, vec2(0.58), 0.03);
+  }
   vec3 film(float x) { return 0.55 + 0.45 * cos(6.2831 * (x + vec3(0.0, 0.33, 0.67))); }
   void main() {
-    vec2 p = vP; float ang = atan(p.y, p.x), open = uOpen, d;
+    vec2 p = vP; float ang = atan(p.y, p.x), open = uOpen, d, dR = 0.0, drawn = 1.0, head = 0.0;
     if (uShape < 0.5) {   // blob: an organic, slowly breathing outline
       vec2 cs = vec2(cos(ang), sin(ang));
       float wob = fbm(vec3(cs * 1.4 + uSeed, uT * 0.33)) - 0.5, wob2 = fbm(vec3(cs * 3.1 - uSeed, uT * 0.6)) - 0.5;
       float R = 0.74 * open * (1.0 + ringAt(ang) + 0.24 * wob + 0.08 * wob2);
       d = length(p) - R;
     } else if (uShape < 1.5) { float R = 0.66 * open * (1.0 + ringAt(ang)); R += 0.01 * sin(ang * 3.0 + uT * 2.1); d = length(p) - R; }
-    else { d = sdBox(p, vec2(0.62, 0.98) * open, 0.18 * open) - ringAt(ang) * 0.7 * open; d += (fbm(vec3(p * 5.0, uT * 0.7)) - 0.5) * 0.13 * open; }
+    else if (uShape < 2.5) { d = sdBox(p, vec2(0.62, 0.98) * open, 0.18 * open) - ringAt(ang) * 0.7 * open; d += (fbm(vec3(p * 5.0, uT * 0.7)) - 0.5) * 0.13 * open; }
+    else {   // sorcerer: the rim stays full size while the view irises open inside it
+      float rs = max(open, 1.0), io = max(open, 1e-3), wob = ringAt(ang) * 0.6;
+      dR = sdShape(p / rs) * rs - wob * rs; d = sdShape(p / io) * io - wob * io;
+      float phi = mod(ang - uStart, 6.2831853), sweep = uDraw * 6.2831853;
+      if (uShape > 7.5 && uDraw < 1.0) {   // spiral: drawn from the centre outward in two turns
+        float best = 1e3; for (int k = 0; k < 2; k++) { float th = phi + 6.2831853 * float(k); if (th <= uDraw * 12.566) best = min(best, abs(length(p) - 0.72 * th / 12.566)); }
+        dR = best; float th0 = uStart + uDraw * 12.566; head = exp(-length(p - 0.72 * uDraw * vec2(cos(th0), sin(th0))) * 26.0) * step(0.001, uDraw);
+      } else if (uDraw < 1.0) {   // drawn round the outline by a white-hot point
+        drawn = smoothstep(sweep + 0.02, sweep - 0.08, phi); float hd = abs(phi - sweep); hd = min(hd, 6.2831853 - hd);
+        head = exp(-hd * 9.0) * exp(-abs(dR) * 40.0) * step(0.001, uDraw);
+      }
+    }
     float alive = step(0.02, open), inside = (1.0 - smoothstep(-0.015, 0.015, d)) * alive * (1.0 - uLoading);
     vec2 suv = gl_FragCoord.xy / uRes;
     vec2 nrm = normalize(p + 1e-4);
-    if (uShape < 1.5) suv += nrm * smoothstep(-0.25, 0.0, d) * 0.04 * min(open, 1.5) * vec2(uRes.y / uRes.x, 1.0);   // lens bend near the edge
+    if (uShape < 1.5 || (uShape > 2.5 && uShape < 3.5) || uShape > 7.5) suv += nrm * smoothstep(-0.25, 0.0, d) * 0.04 * min(open, 1.5) * vec2(uRes.y / uRes.x, 1.0);   // lens bend near the edge
     suv += nrm * sin(length(p) * 26.0 - uT * 7.0) * 0.006 * uJig * inside;   // the jiggle ripples through the view inside
     vec3 col = texture2D(tB, suv).rgb * inside;
     float a = inside;
@@ -367,6 +387,13 @@ const PORTAL_FS = `
       col += vec3(1.0, 0.93, 1.0) * core * 1.1 + hot * glow * 0.85 + tf * (rim * 0.7 + fres * 0.14);
       vec2 hl = p - vec2(-0.24, 0.27) * min(open, 1.0); col += vec3(1.0) * exp(-dot(hl, hl) * 300.0) * 0.8 * inside;
       a = max(a, max(core * 0.9, glow * 0.55));
+    } else if (uShape > 2.5) {   // sorcerer: white-hot core, flickering orange fire, sparks racing round the rim
+      float core = exp(-abs(dR) * 70.0), glow = exp(-abs(dR) * 13.0);
+      float flick = 0.55 + 0.45 * fbm(vec3(ang * 5.0 - uT * 8.0, length(p) * 4.0, uT * 1.7));
+      float streak = pow(0.5 + 0.5 * sin(ang * 22.0 - uT * 15.0), 8.0) + pow(0.5 + 0.5 * sin(ang * 9.0 + uT * 11.0 + 1.3), 10.0);
+      col += (vec3(1.0, 0.93, 0.72) * core * 1.5 + vec3(1.0, 0.42, 0.06) * glow * (0.85 * flick + 0.7 * streak) + vec3(1.0, 0.7, 0.3) * core * streak) * drawn;
+      col += vec3(1.0, 0.85, 0.55) * head * 2.2;
+      a = max(a, max(core * 0.95, glow * 0.6 * flick) * drawn); a = max(a, min(head * 1.5, 1.0));
     } else {
       float core = exp(-abs(d) * 55.0), halo = exp(-max(d, 0.0) * 11.0) * step(0.0, d);
       vec3 c = mix(vec3(1.0, 0.55, 0.95), vec3(0.55, 0.85, 1.0), 0.5 + 0.5 * sin(ang * 2.0 + uT));
@@ -377,7 +404,7 @@ const PORTAL_FS = `
     gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
   }`;
 const SPARK_VS = `
-  attribute vec4 seed; uniform float uT, uOpen, uShape, uPx, uFloor, uBoost; varying float vA, vKind; varying vec3 vC;
+  attribute vec4 seed; uniform float uT, uOpen, uShape, uPx, uFloor, uBoost, uFire; varying float vA, vKind; varying vec3 vC;
   vec2 rim(float a) {
     if (uShape < 1.5) return vec2(cos(a), sin(a)) * 0.72;
     vec2 b = vec2(0.62, 0.98); vec2 d = vec2(cos(a), sin(a)); float s = min(b.x / max(abs(d.x), 1e-3), b.y / max(abs(d.y), 1e-3)); return d * s;
@@ -397,7 +424,7 @@ const SPARK_VS = `
     vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
     float tw = mix(0.45 * (0.8 + 0.2 * sin(uT * 1.7 + seed.x * 40.0)), 1.0, bubble);   // wisps are faint and steady
     vA = (1.0 - t) * smoothstep(0.0, 0.08, t) * tw * min(uOpen * 1.5, 1.0) * (1.0 + uBoost); vKind = bubble;
-    vC = mix(vec3(1.0, 0.45, 0.95), vec3(0.6, 0.85, 1.0), seed.z); vC = mix(vC, vec3(1.0), 0.45);
+    vC = mix(vec3(1.0, 0.45, 0.95), vec3(0.6, 0.85, 1.0), seed.z); vC = mix(vC, vec3(1.0), 0.45); vC = mix(vC, mix(vec3(1.0, 0.55, 0.15), vec3(1.0, 0.85, 0.5), seed.z), uFire);
     float sz = mix(0.06 + 0.1 * seed.y, 0.05 + 0.09 * seed.y, bubble);
     gl_PointSize = clamp(sz * (1.0 + uBoost * 1.5) * uPx / -mv.z, 1.0, mix(48.0, 64.0, bubble));
   }`;
@@ -417,22 +444,29 @@ const quad = new THREE.PlaneGeometry(4.2, 4.2);
 const fx = new THREE.Scene();
 const portals = [];
 let shape = 0;
+const SHAPES = ["Blob", "Bubble", "Doorway", "Ring", "Square", "Triangle", "Door", "Diamond", "Spiral"], DRAW = [950, 1400];   // draw-on time: outlines, spiral
+const shapeIx = (n) => SHAPES.findIndex((x) => x.toLowerCase() === String(n).toLowerCase());
+function polyR(a, n, a0) { const st = 6.2831853 / n, m = (((a - a0) % st) + st) % st; return Math.cos(Math.PI / n) / Math.cos(m - Math.PI / n); }
+function shapeR(a) {   // the sorcerer outline's radius at an angle (matches sdShape in the shader)
+  switch (shape) { case 4: return 0.877 * polyR(a, 4, Math.PI / 4); case 5: return 0.8 * polyR(a, 3, Math.PI / 2);
+    case 6: return Math.min(0.5 / Math.max(Math.abs(Math.cos(a)), 1e-3), 0.95 / Math.max(Math.abs(Math.sin(a)), 1e-3)); case 7: return 0.82 * polyR(a, 4, 0); default: return 0.72; }
+}
 function makePortal(w, at) {
   const P = { w, B: null, loading: true, rt: new THREE.WebGLRenderTarget(1, 1), camB: new THREE.PerspectiveCamera(70, 1, 0.05, 2000),
     group: new THREE.Group(), pos: at.clone(), vel: new THREE.Vector3(), anchor: at.clone(), yaw: 0,
-    open: 0, opening: { t0: performance.now(), from: 0 }, expand: null, seed: Math.random() * 10, flash: 0, PA: new THREE.Matrix4(), PAinv: new THREE.Matrix4(), prevZ: 1, label: document.createElement("div"), ring: new Float32Array(40), ringV: new Float32Array(40), lastVel: new THREE.Vector3(), emitAcc: 0 };
+    open: 0, opening: { t0: performance.now() + (shape > 2.5 ? DRAW[shape === 8 ? 1 : 0] : 0), from: 0 }, drawT0: performance.now(), draw: shape > 2.5 ? 0 : 1, start: -1.5708 + (Math.random() - 0.5) * 0.8, expand: null, seed: Math.random() * 10, flash: 0, PA: new THREE.Matrix4(), PAinv: new THREE.Matrix4(), prevZ: 1, label: document.createElement("div"), ring: new Float32Array(40), ringV: new Float32Array(40), lastVel: new THREE.Vector3(), emitAcc: 0 };
   P.yaw = Math.atan2(pos.x - at.x, pos.z - at.z);
   P.rt.setSize(Math.round(res.x * QL.ps), Math.round(res.y * QL.ps));
   P.mat = new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
-    uniforms: { tB: { value: P.rt.texture }, uRes: { value: res }, uT: { value: 0 }, uOpen: { value: 0 }, uShape: { value: shape }, uLoading: { value: 1 }, uSeed: { value: P.seed }, uFlash: { value: 0 }, uJig: { value: 0 }, uRing: { value: new Array(40).fill(0) } },
+    uniforms: { tB: { value: P.rt.texture }, uRes: { value: res }, uT: { value: 0 }, uOpen: { value: 0 }, uShape: { value: shape }, uDraw: { value: P.draw }, uStart: { value: P.start }, uLoading: { value: 1 }, uSeed: { value: P.seed }, uFlash: { value: 0 }, uJig: { value: 0 }, uRing: { value: new Array(40).fill(0) } },
     vertexShader: `varying vec2 vP; void main() { vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: PORTAL_FS });
   P.sparkMat = new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uT: { value: 0 }, uOpen: { value: 0 }, uShape: { value: shape }, uPx: { value: 800 }, uFloor: { value: -1.2 }, uBoost: { value: 0 } }, vertexShader: SPARK_VS, fragmentShader: SPARK_FS });
+    uniforms: { uT: { value: 0 }, uOpen: { value: 0 }, uShape: { value: shape }, uFire: { value: shape > 2.5 ? 1 : 0 }, uPx: { value: 800 }, uFloor: { value: -1.2 }, uBoost: { value: 0 } }, vertexShader: SPARK_VS, fragmentShader: SPARK_FS });
   P.surface = new THREE.Mesh(quad, P.mat); P.surface.renderOrder = 1;
   P.sparks = new THREE.Points(sparkGeo, P.sparkMat); P.sparks.frustumCulled = false; P.sparks.renderOrder = 2;
   P.group.add(P.surface, P.sparks); fx.add(P.group);
   P.label.className = "plabel"; $("labels").append(P.label);
-  portals.push(P); setWorld(P, w); sfxChime(); poke(P, Math.random() * 6.28, 0.25); return P;
+  portals.push(P); setWorld(P, w); if (shape > 2.5) sfxIgnite(DRAW[shape === 8 ? 1 : 0] / 1000); else sfxChime(); poke(P, Math.random() * 6.28, 0.25); return P;
 }
 function removePortal(P) {
   const k = portals.indexOf(P); if (k >= 0) portals.splice(k, 1);
@@ -447,8 +481,14 @@ function label(P) { P.label.innerHTML = `${WORLDS[P.w].name}<small>${PHONE ? "sw
 const used = () => new Set([here, ...portals.map((p) => p.w), ...WORLDS.flatMap((w, i) => (w.hidden ? [i] : []))]);   // hidden worlds never come up in a bubble
 function freeWorld(from, dir = 1) { const u = used(); for (let k = 1; k <= WORLDS.length; k++) { const i = (((from + dir * k) % WORLDS.length) + WORLDS.length) % WORLDS.length; if (!u.has(i)) return i; } return null; }
 function cycle(P, dir) { const u = used(); u.delete(P.w); for (let k = 1; k <= WORLDS.length; k++) { const i = (((P.w + dir * k) % WORLDS.length) + WORLDS.length) % WORLDS.length; if (!u.has(i)) { setWorld(P, i); sfxBlip(); sfxSwish(Math.max(-0.8, Math.min(0.8, P.pos.clone().project(camera).x))); return; } } }
-function setShape(s) { shape = s; for (const P of portals) { P.mat.uniforms.uShape.value = s; P.sparkMat.uniforms.uShape.value = s; } for (const b of document.querySelectorAll("[data-shape]")) b.classList.toggle("on", +b.dataset.shape === s); }
-for (const b of document.querySelectorAll("[data-shape]")) b.onclick = () => setShape(+b.dataset.shape);
+function setShape(v) {
+  shape = ((v % SHAPES.length) + SHAPES.length) % SHAPES.length; $("shapeBtn").textContent = "Shape: " + SHAPES[shape];
+  for (const P of portals) { P.mat.uniforms.uShape.value = shape; P.sparkMat.uniforms.uShape.value = shape; P.sparkMat.uniforms.uFire.value = shape > 2.5 ? 1 : 0; }
+}
+$("shapeBtn").onclick = () => {   // next shape; sorcerer shapes redraw themselves on every bubble
+  setShape(shape + 1); if (shape < 3) return; sfxIgnite(DRAW[shape === 8 ? 1 : 0] / 1000);
+  for (const P of portals) if (!P.expand) { P.drawT0 = performance.now(); P.draw = 0; P.mat.uniforms.uDraw.value = 0; }
+};
 
 // ---------- sparks: simulated in world space, they fall, drift, hit the room and split ----------
 const NP = REDUCED ? 800 : PHONE ? 2600 : 6500;
@@ -479,25 +519,36 @@ const dust = new THREE.Points(dustGeo, dustMat); dust.frustumCulled = false; dus
 const DUST_TINT = { sea: [0.82, 0.93, 1], wind: [1, 0.84, 0.6], room: [1, 0.88, 0.7] };
 let dustFor = -1;
 const PAL = [[1, 0.5, 0.92], [0.78, 0.52, 1], [1, 1, 1], [0.58, 0.86, 1], [1, 0.82, 0.55]];
+const PAL_FIRE = [[1, 0.95, 0.8], [1, 0.75, 0.3], [1, 0.55, 0.12], [1, 0.4, 0.08], [1, 0.85, 0.5]];
+let curPal = PAL, inheritCol = -1;   // sparks that split keep their parent's colour
 function spawn(x, y, z, vx, vy, vz, life, size, heavy, gen = 0) {
   let i = sp.head; for (let k = 0; k < 24 && sp.state[i] !== 0; k++) i = (i + 1) % NP; sp.head = (i + 1) % NP;
   sp.p.set([x, y, z], i * 3); sp.v.set([vx, vy, vz], i * 3); sp.life[i] = sp.max[i] = life; sp.g[i] = heavy ? 5.5 : 0.7 + Math.random() * 0.8; sp.state[i] = 1; sp.gen[i] = gen; aS.array[i] = size;
-  const c = PAL[(Math.random() * (Math.random() < 0.35 ? 3 : PAL.length)) | 0]; aCol.array.set(c, i * 3);
+  if (inheritCol >= 0) aCol.array.copyWithin(i * 3, inheritCol * 3, inheritCol * 3 + 3); else aCol.array.set(curPal[(Math.random() * (Math.random() < 0.35 ? 3 : curPal.length)) | 0], i * 3);
 }
 const _lp = new THREE.Vector3(), _ld = new THREE.Vector3(), _lv = new THREE.Vector3();
 function ringR(P, ang) { const f = (ang / 6.2831853 + 0.5) * 40, i0 = ((Math.floor(f) % 40) + 40) % 40, t = f - Math.floor(f); return P.ring[i0] * (1 - t) + P.ring[(i0 + 1) % 40] * t; }
 function emitFrom(P, n, speed = 1) {
-  const R0 = (shape === 2 ? 0.7 : shape === 1 ? 0.66 : 0.74) * Math.min(P.open, 3);
+  const fire = shape > 2.5, R0 = (shape === 2 ? 0.7 : shape === 1 ? 0.66 : 0.74) * Math.min(P.open, 3), rs = Math.min(Math.max(P.open, 1), 3); curPal = fire ? PAL_FIRE : PAL;
   for (let k = 0; k < n; k++) {
-    const a = (Math.random() - 0.5) * 6.2831853, R = R0 * (1 + ringR(P, a)) * (0.88 + Math.random() * 0.18), ca = Math.cos(a), sa = Math.sin(a);
+    const a = (Math.random() - 0.5) * 6.2831853, R = fire ? shapeR(a) * rs * (1 + ringR(P, a) * 0.6) * (0.97 + Math.random() * 0.06) : R0 * (1 + ringR(P, a)) * (0.88 + Math.random() * 0.18), ca = Math.cos(a), sa = Math.sin(a);
     _lp.set(ca * R * P.surface.scale.x, sa * R * P.surface.scale.y, (Math.random() - 0.5) * 0.06).applyMatrix4(P.PA);
-    const out = (0.15 + Math.random() * 0.55) * speed, tan = (Math.random() - 0.5) * 1.2 * speed;
+    const out = (0.15 + Math.random() * 0.55) * speed, tan = fire ? (0.5 + Math.random() * 1.3) * speed : (Math.random() - 0.5) * 1.2 * speed;   // fire flings sparks off along the spin
     _ld.set(ca * out - sa * tan, sa * out + ca * tan + Math.random() * 0.15, (Math.random() - 0.5) * 0.5 * speed).applyQuaternion(P.group.quaternion);
     const heavy = Math.random() < 0.28;
     spawn(_lp.x, _lp.y, _lp.z, _ld.x + P.vel.x * 0.2, _ld.y + P.vel.y * 0.2, _ld.z + P.vel.z * 0.2, 1.2 + Math.random() * (heavy ? 3.4 : 2.2), 0.022 + Math.random() * 0.04, heavy);
   }
 }
 const burst = (P, n) => emitFrom(P, n, 1.8);
+function emitHead(P, n) {   // the white-hot point drawing the shape throws off a shower of sparks
+  curPal = PAL_FIRE; const s8 = shape === 8, th = P.start + P.draw * (s8 ? 12.566 : 6.2832), R = s8 ? 0.72 * P.draw : shapeR(th), ca = Math.cos(th), sa = Math.sin(th);
+  for (let k = 0; k < n; k++) {
+    _lp.set(ca * R + (Math.random() - 0.5) * 0.03, sa * R + (Math.random() - 0.5) * 0.03, (Math.random() - 0.5) * 0.04).applyMatrix4(P.PA);
+    const v = 0.8 + Math.random() * 2.2, out = (Math.random() - 0.3) * 0.8;
+    _ld.set(-sa * v + ca * out, ca * v + sa * out + Math.random() * 0.3, (Math.random() - 0.5) * 0.8).applyQuaternion(P.group.quaternion);
+    const heavy = Math.random() < 0.35; spawn(_lp.x, _lp.y, _lp.z, _ld.x, _ld.y, _ld.z, 0.5 + Math.random() * (heavy ? 1.8 : 1.0), 0.02 + Math.random() * 0.035, heavy);
+  }
+}
 let hitsThisFrame = 0;
 function stepSparks(dt) {
   const g = A?.grid, P3 = sp.p, V3s = sp.v; let children = 0; hitsThisFrame = 0;
@@ -515,7 +566,7 @@ function stepSparks(dt) {
         const vn = vx * ax + vy * ay + vz * az, spd = Math.hypot(vx, vy, vz);
         if (vn < 0) { vx -= 1.4 * vn * ax; vy -= 1.4 * vn * ay; vz -= 1.4 * vn * az; }
         vx *= 0.62; vy *= 0.62; vz *= 0.62; hitsThisFrame++;
-        if (spd > 0.55 && sp.gen[i] < 2 && children < 60) {   // a hard hit splits into smaller sparks
+        if (spd > 0.55 && sp.gen[i] < 2 && children < 60) { inheritCol = i;   // a hard hit splits into smaller sparks
           for (let c = 0; c < 2; c++) { children++; spawn(x, y, z, vx + ax * spd * 0.5 + (Math.random() - 0.5) * spd * 0.8, vy + ay * spd * 0.5 + Math.random() * spd * 0.4, vz + az * spd * 0.5 + (Math.random() - 0.5) * spd * 0.8, 0.35 + Math.random() * 0.6, aS.array[i] * 0.6, false, sp.gen[i] + 1); }
         }
         if (Math.hypot(vx, vy, vz) < 0.14) { sp.state[i] = 2; sp.life[i] = Math.min(sp.life[i], 0.8 + Math.random() * 1.6); }   // settles as glowing dust
@@ -524,7 +575,7 @@ function stepSparks(dt) {
     }
     const age = sp.max[i] - sp.life[i]; aA.array[i] = Math.min(1, age * 8) * Math.min(1, sp.life[i] / (st === 2 ? 1.2 : 0.6)) * (st === 2 ? 0.7 : 1);
   }
-  aPos.needsUpdate = aCol.needsUpdate = aA.needsUpdate = aS.needsUpdate = true;
+  inheritCol = -1; aPos.needsUpdate = aCol.needsUpdate = aA.needsUpdate = aS.needsUpdate = true;
 }
 function clearSparks() { sp.state.fill(0); aA.array.fill(0); aA.needsUpdate = true; }
 // rim springs: inertia when the bubble moves, waves round the ring, and pokes from the cursor
@@ -683,6 +734,12 @@ function sfxShimmer() {   // a soft, airy shimmer as a bubble is about to open
   const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05, t + 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
   n.connect(f).connect(g); panned(g, 0, 0.8); n.start(t, Math.random()); n.stop(t + 1.7);
 }
+function sfxIgnite(dur) {
+  if (!soundOn || !bus) return; const c = AC, t = c.currentTime, n = c.createBufferSource(); n.buffer = white(); n.loop = true;
+  const f = c.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 0.8; f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(2600, t + dur);
+  const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.14, t + 0.15); g.gain.setTargetAtTime(0.09, t + 0.2, 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.5);
+  n.connect(f).connect(g); panned(g, 0, 0.5); n.start(t, Math.random()); n.stop(t + dur + 0.6); setTimeout(() => sfxChime(), dur * 1000);
+}
 function sfxCrackle(k) {
   if (!soundOn || !bus || performance.now() - lastCrackle < 45) return; lastCrackle = performance.now(); const c = AC, t = c.currentTime, len = 0.02 + Math.random() * 0.03;
   const b = c.createBuffer(1, Math.ceil(c.sampleRate * len), c.sampleRate), dd = b.getChannelData(0); for (let i = 0; i < dd.length; i++) dd[i] = (Math.random() * 2 - 1) * (1 - i / dd.length);
@@ -785,7 +842,7 @@ let tour = 0;
 function stopTour() { if (tour) { clearInterval(tour); tour = 0; $("tourBtn").classList.remove("on"); } }
 $("tourBtn").onclick = () => {
   if (tour) return stopTour(); $("tourBtn").classList.add("on"); let n = 0;
-  tour = setInterval(() => { const P = nearest(); if (!P) return; n++; if (n % 3) cycle(P, 1); else { setShape(n % 9 === 0 ? 2 : n % 6 === 0 ? 1 : 0); expandPortal(P); } }, 2600);
+  tour = setInterval(() => { const P = nearest(); if (!P) return; n++; if (n % 3) cycle(P, 1); else { setShape(shape + 1); expandPortal(P); } }, 2600);
 };
 
 function copyCam() {   // for story files: where you stand and what you look at, as JSON
@@ -854,7 +911,8 @@ async function doStep(st, named, run) {   // one step of a story file; "wait" (m
   else if (st.fade !== undefined) fadeTo(st.fade, st.ms ?? 900);
   else if (st.caption !== undefined) caption(st.caption, st.small, st.ms ?? 4000);
   else if (st.sound) SOUNDS[st.sound]?.();
-  else if (st.open) { const P = makePortal(WIX(st.open), st.at ? V3(st.at) : aheadOf(st)); named[st.name || st.open] = P; }
+  else if (st.open) { if (st.shape) setShape(shapeIx(st.shape)); const P = makePortal(WIX(st.open), st.at ? V3(st.at) : aheadOf(st)); named[st.name || st.open] = P; }
+  else if (st.shape) setShape(shapeIx(st.shape));
   else if (st.world) { const P = named[st.in]; if (P) { setWorld(P, WIX(st.world)); sfxBlip(); sfxSwish(0.2); } }
   else if (st.waitOpen) { const P = named[st.waitOpen]; await until(() => P.B && !P.loading && P.open > 0.9, run); }
   else if (st.enter) {
@@ -889,6 +947,7 @@ if (Q.has("yaw")) yaw = +Q.get("yaw");
 $("load").classList.add("done"); updateDock();
 if (only === null && !STORY) setTimeout(() => makePortal(FIRST, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.45, -0.2, 0))), 500);
 setTimeout(() => ($("hint").style.opacity = 0), 10000);
+if (Q.has("shape") && shapeIx(Q.get("shape")) >= 0) setShape(shapeIx(Q.get("shape")));
 if (Q.has("tour")) setTimeout(() => $("tourBtn").click(), 2500);
 if (only === null && !STORY) setTimeout(prefetchAll, 6000);
 if (DEBUG) window.__p = { cache, warmList, get here() { return here; }, get QL() { return QL; }, get step() { return step; }, GPU, get AC() { return AC; }, get amb() { return amb; }, get A() { return A; }, portals, makePortal, expandPortal, cycle, setShape, camera, get pos() { return pos; }, set yaw(v) { yaw = v; }, get yaw() { return yaw; }, set pitch(v) { pitch = v; } };
@@ -962,6 +1021,7 @@ renderer.setAnimationLoop((now) => {
     }
     if (Math.random() < dt * 0.9) poke(P, (Math.random() - 0.5) * 6.28, (Math.random() - 0.5) * 0.5);   // it never sits still
     stepRing(P, dt);
+    if (P.draw < 1) { P.draw = Math.min(1, (now - P.drawT0) / DRAW[shape === 8 ? 1 : 0]); P.mat.uniforms.uDraw.value = P.draw; emitHead(P, Math.ceil(dt * (PHONE ? 500 : 1100) * QL.np)); }
     if (P.B && P.open > 0.3) { P.emitAcc += dt * (P.expand ? 2200 : (PHONE ? 420 : 900)) * Math.min(P.open, 1.5) * QL.np; const n = P.emitAcc | 0; P.emitAcc -= n; emitFrom(P, n, P.expand ? 2.2 : 1); }
     P.flash = Math.max(0, P.flash - dt * 2.5);
     P.mat.uniforms.uOpen.value = Math.max(0, P.open); P.sparkMat.uniforms.uOpen.value = Math.max(0.15, Math.min(P.open, 1.3)); P.mat.uniforms.uT.value = P.sparkMat.uniforms.uT.value = t; P.mat.uniforms.uFlash.value = P.flash * 0.6;

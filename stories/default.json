@@ -41,7 +41,8 @@
    "name": "first",
    "ahead": 2.8,
    "turn": -0.2,
-   "rise": -0.05
+   "rise": -0.05,
+   "shape": "spiral"
   },
   {
    "caption": "Then a bubble appeared.",
@@ -85,7 +86,8 @@
    "name": "next",
    "ahead": 3,
    "turn": 0.25,
-   "rise": -0.1
+   "rise": -0.1,
+   "shape": "square"
   },
   {
    "waitOpen": "next"

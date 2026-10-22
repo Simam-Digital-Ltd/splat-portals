@@ -78,6 +78,7 @@ The file is a list of steps, run one after another. Any step can end with `"wait
 | `"world": id` | Change the world inside a bubble. | `in` (the bubble's name) |
 | `"enter": name` | Step through that bubble. Waits until you arrive. | |
 | `"sound": name` | `crackle`, `wobble`, `whoosh`, `chime`, `blip` or `swish`. | |
+| `"shape": name` | Change the portal shape: blob, bubble, doorway, ring, square, triangle, door, diamond or spiral. It can also go on an `open` step. | |
 | `"end": true` | Show the end card from `end`. `false` hides it. | |
 
 **Framing a shot:** explore normally, stand where you want the camera, and press **C**. It copies `{ "world", "p", "look", "fov" }`, which you paste into a `move` step.
@@ -115,7 +116,7 @@ The worlds are listed in `worlds.json`:
 - **A jiggly rim.** The edge is a ring of 40 springs. Moving the bubble, or brushing it with the cursor, sends waves round it, and the view inside ripples with them.
 - **Bubbles behave like bubbles.** Each one sits on a soft spring, so it bobs, sways when you look around, squashes a little as it moves, and drifts back into view when you turn away.
 - **Several bubbles at once,** each a window into a different world.
-- **Three shapes:** an organic blob (the default), a round soap bubble, and a doorway with a ragged white-hot rim.
+- **Nine shapes,** one Shape button. The soap-film blob, bubble and doorway, plus six sorcerer portals: ring, square, triangle, door, diamond and spiral. A sorcerer portal draws itself with a white-hot point racing round the outline (the spiral winds out from the centre), flings orange sparks off along the spin, and then irises open inside its ring of fire. Pick one with `?shape=ring` or a story's `"shape"`.
 - **Bubbles bend light.** The view inside warps near the edge, like looking through a real soap film.
 - **Wisps, bubbles and dust.** Soft wisps curl off the rim like smoke, with the odd soap bubble, and fine dust drifts through every world, tinted to its light (gold indoors and in the desert, pale on the coast). Set `"dust": 0–1` on a world to change how much.
 - **Worlds break up and form.** The world you leave scatters; the one you arrive in assembles out of a violet mist.
