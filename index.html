@@ -475,6 +475,7 @@ function removePortal(P) {
 async function setWorld(P, w) {
   P.w = w; P.loading = true; P.mat.uniforms.uLoading.value = 1; P.label.innerHTML = `${WORLDS[w].name}<small>loading</small>`; updateDock();
   const world = await loadWorld(w); if (P.w !== w || !portals.includes(P)) return;
+  if (!world.grid) (self.requestIdleCallback || setTimeout)(() => world.grid || buildGrid(world), { timeout: 2500 });   // collisions built while the bubble sits idle
   P.B = world; setClip(world, true); P.loading = false; P.mat.uniforms.uLoading.value = 0; P.flash = 1; label(P); updateDock(); evict(); setTimeout(prewarm, 500); burst(P, 260); poke(P, Math.random() * 6.28, 0.35);
 }
 function label(P) { P.label.innerHTML = `${WORLDS[P.w].name}<small>${PHONE ? "swipe to change · tap to enter" : "scroll to change · click to enter"}</small>`; }
@@ -824,14 +825,14 @@ function expandPortal(P) {
   if (!P.B || P.expand || busy()) return;
   P.expand = { t0: performance.now(), dur: REDUCED ? 500 : 1250, from: P.open, pos0: pos.clone() }; sfxWhoosh(REDUCED ? 0.5 : 1.25);
 }
-function enter(P) {
+function enter(P, walk = false) {   // walk: stepping through on foot is seamless, like Portal; clicking keeps the cinematic arrival
   // carry your pose across the portal so the picture does not jump: what you saw through it is now around you
   pos.copy(pos.clone().applyMatrix4(P.PAinv)); yaw -= P.yaw;
   if (A) { A.U.burst.value = 0; A.U.glowR.value = 0; A.mesh.updateVersion(); }
   A = P.B; if (!A.grid) buildGrid(A); setClip(A, false); here = P.w; clearSparks(); setMood(WORLDS[here].id);
   for (const Q2 of [...portals]) removePortal(Q2);
-  A.U.bp.value.copy(toLocal(A, pos)); arrive = REDUCED ? null : { t0: performance.now() };
-  flash = 1; if (!STORY) title(WORLDS[here].name, "you stepped in"); updateDock();
+  A.U.bp.value.copy(toLocal(A, pos)); arrive = REDUCED || walk ? null : { t0: performance.now() };
+  if (!walk) { flash = 1; if (!STORY) title(WORLDS[here].name, "you stepped in"); } updateDock();
   setTimeout(() => { const w = freeWorld(here); if (!STORY && w !== null && !portals.length) makePortal(w, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.5, -0.2, 0))); }, REDUCED ? 300 : 1500);
   evict(); setTimeout(prewarm, 2500);
 }
@@ -1016,7 +1017,8 @@ renderer.setAnimationLoop((now) => {
     }
     if (P.B && P.open > 0.9 && !P.expand) {   // walking into a bubble also takes you through
       const l = camera.position.clone().applyMatrix4(P.PAinv);
-      if (P.prevZ > 0 && l.z <= 0 && Math.hypot(l.x, l.y) < 0.7) { sfxWhoosh(0.7); enter(P); continue; }
+      if (P.prevZ > 0 && l.z <= 0 && Math.hypot(l.x, l.y) < 0.7) { sfxSwish(0); enter(P, true); continue; }
+      if (!P.B.grid && camera.position.distanceTo(P.pos) < 3) buildGrid(P.B);   // close to a bubble: have its world's collisions ready before you cross
       P.prevZ = l.z;
     }
     if (Math.random() < dt * 0.9) poke(P, (Math.random() - 0.5) * 6.28, (Math.random() - 0.5) * 0.5);   // it never sits still
