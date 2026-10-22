@@ -69,7 +69,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   <button class="btn on" id="soundBtn" aria-pressed="true">Sound on</button>
   <button class="btn" id="qBtn" title="Picture quality. Auto adapts to this device.">Auto</button>
 </header>
-<div id="hint" class="glass">Scroll on a bubble to change its world · click it to step in · click anywhere to open another · drag to look, W A S D to walk</div>
+<div id="hint" class="glass">Scroll on a bubble to change its world · click it, or walk into it, to step in · click anywhere to open another · drag to look · hold or W A S D to walk</div>
 <div id="dock" class="glass"><span class="label">Nearest bubble</span><div id="worlds"></div></div>
 <div id="title"><div id="titleT"></div><small id="titleS"></small></div>
 <div id="credit">Inspired by <a href="https://x.com/XRarchitect" target="_blank" rel="noopener">Ian Curtis (@XRarchitect)</a> of World Labs · Open source on <a href="https://github.com/Simam-Digital-Ltd/splat-portals" target="_blank" rel="noopener">GitHub</a> · AI-generated worlds by Simam Digital</div>
@@ -96,6 +96,7 @@ const WORLDS = [
   { id: "church", name: "Old church", file: "worlds/church.sog", flip: true },
   { id: "pyramids", name: "Pyramids", file: "worlds/pyramids.sog", flip: false },
   { id: "rock-tomb", name: "Rock-cut tomb", file: "worlds/rock-tomb.sog", flip: false },
+  { id: "bay", name: "Quiet bay", file: "worlds/bay.sog", flip: false },
 ];
 if (Q.has("flips")) Q.get("flips").split("").forEach((c, i) => WORLDS[i] && (WORLDS[i].flip = c === "1"));
 
@@ -112,9 +113,9 @@ canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); noGL("T
 // std / px: how far each splat spreads (smaller is cheaper to fill). sortMs: how often splats re-sort. mod: re-run the world effect every n frames.
 const STEPS = [
   { name: "Light", scale: 0.55, ps: 0.5, pr: 1, maxp: 1, np: 0.3, std: 2.0, px: 96, sortMs: 80, blurN: 8, mod: 4, spare: 0, skip: true },
-  { name: "Balanced", scale: 0.75, ps: 0.6, pr: 1.25, maxp: 2, np: 0.55, std: 2.3, px: 200, sortMs: 40, blurN: 14, mod: 2, spare: 0, skip: false },
+  { name: "Balanced", scale: 0.75, ps: 0.6, pr: 1.25, maxp: 2, np: 0.55, std: 2.3, px: 200, sortMs: 40, blurN: 14, mod: 2, spare: 1, skip: false },
   { name: "High", scale: 0.9, ps: 0.8, pr: 1.5, maxp: 3, np: 0.8, std: 2.6, px: 360, sortMs: 16, blurN: 20, mod: 1, spare: 1, skip: false },
-  { name: "Full", scale: 1, ps: 1, pr: 1.75, maxp: 3, np: 1, std: Math.sqrt(8), px: 512, sortMs: 0, blurN: 28, mod: 1, spare: 1, skip: false },
+  { name: "Full", scale: 1, ps: 1, pr: 1.75, maxp: 3, np: 1, std: Math.sqrt(8), px: 512, sortMs: 0, blurN: 28, mod: 1, spare: 2, skip: false },
 ];
 const gl0 = renderer.getContext(), dbgInfo = gl0.getExtension("WEBGL_debug_renderer_info");
 const GPU = dbgInfo ? String(gl0.getParameter(dbgInfo.UNMASKED_RENDERER_WEBGL)) : "";
@@ -139,8 +140,16 @@ const res = new THREE.Vector2(1, 1);
 
 // ---------- each world: its own scene and SparkRenderer, so each sorts for its own camera ----------
 const cache = new Map();
+// world files are kept in the browser's cache storage, so a second visit (or a world seen before) opens from disk
+const STORE = "splat-portals-v2";
+const SLOW_NET = !!navigator.connection && (navigator.connection.saveData || /2g|3g/.test(navigator.connection.effectiveType || ""));
+const openStore = () => (self.caches ? caches.open(STORE).catch(() => null) : Promise.resolve(null));
+if (self.caches) caches.keys().then((ks) => ks.filter((k) => k.startsWith("splat-portals-") && k !== STORE).forEach((k) => caches.delete(k))).catch(() => {});
 async function fetchBytes(url, onProg) {
-  const r = await fetch(url); if (!r.ok) throw new Error(url + " " + r.status);
+  const store = await openStore(); let r = store ? await store.match(url).catch(() => null) : null; const fresh = !r;
+  if (!r) r = await fetch(url);
+  if (!r.ok) throw new Error(url + " " + r.status);
+  if (fresh && store) store.put(url, r.clone()).catch(() => {});
   const n = +r.headers.get("content-length") || 0, rd = r.body.getReader(), parts = []; let got = 0;
   for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); got += value.length; onProg?.(n ? got / n : 0); }
   const o = new Uint8Array(got); let k = 0; for (const p of parts) { o.set(p, k); k += p.length; } return o;
@@ -176,7 +185,7 @@ function loadWorld(i, onProg) {
     });
     mesh.updateGenerator(); scene.add(mesh); scene.updateMatrixWorld(true);
     const rec = { i, scene, spark, mesh, U }; tuneSpark(rec);
-    buildGrid(rec); quietUntil = performance.now() + 1500; return rec;
+    quietUntil = performance.now() + 1500; return rec;   // the collision grid is built only when you enter the world
   })();
   cache.set(i, p); return p;
 }
@@ -199,10 +208,34 @@ function solid(g, x, y, z) {
   if (ix < 0 || iy < 0 || iz < 0 || ix >= GNX || iy >= GNY || iz >= GNZ) return 0;
   return g[(iy * GNZ + iz) * GNX + ix] >= 2 ? 1 : 0;
 }
-async function evict() {   // keep the GPU light: the world you are in, the bubbles' worlds, and one spare
-  const keep = new Set([here, ...portals.map((p) => p.w)]);
+function warmList() {   // the worlds one scroll away from each bubble, the bubble you face first
+  const out = [], u = used(), F = focusPortal();
+  for (const P of [...portals].sort((a, b) => (b === F) - (a === F))) for (const dir of [1, -1])
+    for (let k = 1; k <= WORLDS.length; k++) { const i = (((P.w + dir * k) % WORLDS.length) + WORLDS.length) % WORLDS.length; if (!u.has(i)) { if (!out.includes(i)) out.push(i); break; } }
+  return out.slice(0, QL.spare);
+}
+let warming = false;
+async function prewarm() {   // decode those worlds ahead of time, one by one, so a scroll swaps instantly
+  if (warming) return; warming = true;
+  try { for (const i of warmList()) { if (cache.has(i)) continue; if (portals.some((p) => p.loading) || busy()) break; await loadWorld(i); await new Promise((r) => setTimeout(r, 400)); } }
+  catch (e) { console.warn("prewarm", e); } finally { warming = false; }
+}
+async function prefetchAll() {   // then download every other world into cache storage in the background (not on slow or metered connections)
+  const store = await openStore(); if (!store || SLOW_NET) return;
+  const order = [...WORLDS.keys()].map((k) => (here + k) % WORLDS.length).slice(0, PHONE ? 4 : WORLDS.length);
+  for (const i of order) {
+    const url = BASE + WORLDS[i].file;
+    try {
+      if (await store.match(url)) continue;
+      while (portals.some((p) => p.loading) || busy()) await new Promise((r) => setTimeout(r, 1000));
+      const r = await fetch(url); if (r.ok) await store.put(url, r);
+      await new Promise((r) => setTimeout(r, 600));
+    } catch { return; }   // storage full or offline: stop quietly
+  }
+}
+async function evict() {   // keep the GPU light: the world you are in, the bubbles' worlds, and the ones a scroll away
+  const keep = new Set([here, ...portals.map((p) => p.w), ...warmList()]);
   for (const [i, pr] of [...cache]) {
-    if (cache.size <= keep.size + QL.spare) break;
     if (keep.has(i)) continue;
     cache.delete(i); try { const w = await pr; w.mesh.dispose?.(); w.spark.dispose?.(); } catch {}
   }
@@ -324,7 +357,7 @@ function removePortal(P) {
 async function setWorld(P, w) {
   P.w = w; P.loading = true; P.mat.uniforms.uLoading.value = 1; P.label.innerHTML = `${WORLDS[w].name}<small>loading</small>`; updateDock();
   const world = await loadWorld(w); if (P.w !== w || !portals.includes(P)) return;
-  P.B = world; setClip(world, true); P.loading = false; P.mat.uniforms.uLoading.value = 0; P.flash = 1; label(P); updateDock(); evict(); burst(P, 260); poke(P, Math.random() * 6.28, 0.35);
+  P.B = world; setClip(world, true); P.loading = false; P.mat.uniforms.uLoading.value = 0; P.flash = 1; label(P); updateDock(); evict(); setTimeout(prewarm, 500); burst(P, 260); poke(P, Math.random() * 6.28, 0.35);
 }
 function label(P) { P.label.innerHTML = `${WORLDS[P.w].name}<small>${PHONE ? "swipe to change · tap to enter" : "scroll to change · click to enter"}</small>`; }
 const used = () => new Set([here, ...portals.map((p) => p.w)]);
@@ -466,6 +499,7 @@ const MOODS = {
   gallery: { root: 130.81, air: "room", wave: 0.05, bright: 1000 },
   tombs: { root: 110, air: "wind", wave: 0.07, bright: 800 },
   church: { root: 98, air: "room", wave: 0.03, bright: 650 },
+  bay: { root: 155.56, air: "sea", wave: 0.12, bright: 1000 },
   pyramids: { root: 116.54, air: "wind", wave: 0.08, bright: 850 },
   "rock-tomb": { root: 103.83, air: "wind", wave: 0.05, bright: 700 },
 };
@@ -576,7 +610,7 @@ function portalAt(x, y) {   // the bubble under a screen point, nearest first
 }
 let drag = null;
 addEventListener("pointerdown", () => ensureAudio(), { once: true }); addEventListener("keydown", () => ensureAudio(), { once: true }); addEventListener("wheel", () => ensureAudio(), { once: true });
-canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, P: portalAt(e.clientX, e.clientY), swiped: false }; canvas.setPointerCapture(e.pointerId); stopTour(); });
+canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, P: portalAt(e.clientX, e.clientY), swiped: false, t0: performance.now(), moved: false, walk: false }; canvas.setPointerCapture(e.pointerId); stopTour(); });
 canvas.addEventListener("pointermove", (e) => {
   if (!drag) {
     canvas.classList.toggle("over", !!portalAt(e.clientX, e.clientY));
@@ -587,11 +621,12 @@ canvas.addEventListener("pointermove", (e) => {
     return;
   }
   if (drag.P && PHONE && !drag.swiped && Math.abs(e.clientX - drag.x0) > 50 && Math.abs(e.clientX - drag.x0) > Math.abs(e.clientY - drag.y0)) { drag.swiped = true; cycle(drag.P, e.clientX < drag.x0 ? 1 : -1); return; }
+  if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 8) drag.moved = true;
   if (drag.swiped || busy()) return;
   const dx = (e.clientX - drag.x) * 0.0042; yaw -= dx; yawVel = -dx / 0.016; pitch = Math.max(-1.3, Math.min(1.3, pitch - (e.clientY - drag.y) * 0.0042)); drag.x = e.clientX; drag.y = e.clientY;
 });
 canvas.addEventListener("pointerup", (e) => {
-  const d = drag; drag = null; if (!d || d.swiped || Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 6 || busy() || !A) return;
+  const d = drag; drag = null; if (!d || d.walk || d.swiped || Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 6 || busy() || !A) return;
   const P = portalAt(e.clientX, e.clientY);
   if (P) return expandPortal(P);
   // open another bubble where you clicked
@@ -628,12 +663,12 @@ function enter(P) {
   // carry your pose across the portal so the picture does not jump: what you saw through it is now around you
   pos.copy(pos.clone().applyMatrix4(P.PAinv)); yaw -= P.yaw;
   if (A) { A.U.burst.value = 0; A.U.glowR.value = 0; A.mesh.updateVersion(); }
-  A = P.B; setClip(A, false); here = P.w; clearSparks(); setMood(WORLDS[here].id);
+  A = P.B; if (!A.grid) buildGrid(A); setClip(A, false); here = P.w; clearSparks(); setMood(WORLDS[here].id);
   for (const Q2 of [...portals]) removePortal(Q2);
   A.U.bp.value.copy(toLocal(A, pos)); arrive = REDUCED ? null : { t0: performance.now() };
   flash = 1; title(WORLDS[here].name, "you stepped in"); updateDock();
   setTimeout(() => { const w = freeWorld(here); if (w !== null && !portals.length) makePortal(w, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.5, -0.2, 0))); }, REDUCED ? 300 : 1500);
-  evict();
+  evict(); setTimeout(prewarm, 2500);
 }
 function title(t, s) { $("titleT").textContent = t; $("titleS").textContent = s; $("title").classList.add("on"); setTimeout(() => $("title").classList.remove("on"), 1800); }
 
@@ -648,13 +683,15 @@ $("tourBtn").onclick = () => {
 // ---------- start ----------
 applyQuality(); applyCam();
 const only = Q.has("only") ? +Q.get("only") : null;
-A = await loadWorld(only ?? 0, (f) => ($("loadBar").style.width = `${Math.round(100 * f)}%`)); here = only ?? 0;
+const START = WORLDS.findIndex((w) => w.id === "pavilion"), FIRST = WORLDS.findIndex((w) => w.id === "bay");   // open on the beach at sunset, with the bay in the first bubble
+A = await loadWorld(only ?? START, (f) => ($("loadBar").style.width = `${Math.round(100 * f)}%`)); here = only ?? START; buildGrid(A);
 if (Q.has("yaw")) yaw = +Q.get("yaw");
 $("load").classList.add("done"); updateDock();
-if (only === null) setTimeout(() => makePortal(1, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.45, -0.2, 0))), 500);
+if (only === null) setTimeout(() => makePortal(FIRST, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.45, -0.2, 0))), 500);
 setTimeout(() => ($("hint").style.opacity = 0), 10000);
 if (Q.has("tour")) setTimeout(() => $("tourBtn").click(), 2500);
-if (DEBUG) window.__p = { get QL() { return QL; }, get step() { return step; }, GPU, get AC() { return AC; }, get amb() { return amb; }, get A() { return A; }, portals, makePortal, expandPortal, cycle, setShape, camera, get pos() { return pos; }, set yaw(v) { yaw = v; }, get yaw() { return yaw; }, set pitch(v) { pitch = v; } };
+if (only === null) setTimeout(prefetchAll, 6000);
+if (DEBUG) window.__p = { cache, warmList, get here() { return here; }, get QL() { return QL; }, get step() { return step; }, GPU, get AC() { return AC; }, get amb() { return amb; }, get A() { return A; }, portals, makePortal, expandPortal, cycle, setShape, camera, get pos() { return pos; }, set yaw(v) { yaw = v; }, get yaw() { return yaw; }, set pitch(v) { pitch = v; } };
 
 // ---------- quality governor: steps down when frames run slow, and back up when there is room ----------
 let ema = 16, slowT = 0, fastT = 0, coolT = 0, frameN = 0, statT = 0;
@@ -684,6 +721,7 @@ renderer.setAnimationLoop((now) => {
     if (keys.KeyW || keys.ArrowUp) pos.addScaledVector(f0, sp); if (keys.KeyS || keys.ArrowDown) pos.addScaledVector(f0, -sp);
     if (keys.KeyA || keys.ArrowLeft) pos.addScaledVector(_r, -sp); if (keys.KeyD || keys.ArrowRight) pos.addScaledVector(_r, sp);
     if (keys.KeyQ) pos.y -= sp; if (keys.KeyE) pos.y += sp;
+    if (drag && !drag.swiped && (drag.walk || (!drag.moved && now - drag.t0 > 380))) { drag.walk = true; pos.addScaledVector(f0, 1.2 * dt); }
   }
   yawVel *= Math.exp(-dt * 6);
   let fov = 70; blur = 0;
@@ -693,7 +731,7 @@ renderer.setAnimationLoop((now) => {
     if (!portals.includes(P)) continue;
     if (!P.expand) {
       const toA = P.anchor.clone().sub(pos), dist = toA.length(), ang = Math.acos(THREE.MathUtils.clamp(toA.clone().setY(0).normalize().dot(f), -1, 1));
-      if (ang > 0.75 || dist > 7 || dist < 1.1) {
+      if (dist > 7 || ang > (dist < 1.4 ? 1.5 : 0.75)) {
         const slot = (k - (portals.length - 1) / 2) * 1.6;
         P.anchor.lerp(pos.clone().addScaledVector(f, 2.6).addScaledVector(right, slot + 0.4).add(new THREE.Vector3(0, -0.2, 0)), 1 - Math.exp(-dt * 1.4));
       }
@@ -719,7 +757,7 @@ renderer.setAnimationLoop((now) => {
     }
     if (P.B && P.open > 0.9 && !P.expand) {   // walking into a bubble also takes you through
       const l = camera.position.clone().applyMatrix4(P.PAinv);
-      if (P.prevZ > 0 && l.z <= 0 && Math.hypot(l.x, l.y) < 0.7) { enter(P); continue; }
+      if (P.prevZ > 0 && l.z <= 0 && Math.hypot(l.x, l.y) < 0.7) { sfxWhoosh(0.7); enter(P); continue; }
       P.prevZ = l.z;
     }
     if (Math.random() < dt * 0.9) poke(P, (Math.random() - 0.5) * 6.28, (Math.random() - 0.5) * 0.5);   // it never sits still
@@ -737,7 +775,7 @@ renderer.setAnimationLoop((now) => {
   stepSparks(dt); spMat.uniforms.uT.value = t; spMat.uniforms.uPx.value = res.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   { let lvl = 0; for (const P of portals) lvl += Math.min(P.open, 1) / Math.max(1, camera.position.distanceTo(P.pos) ** 2); setHum(Math.min(0.06, lvl * 0.05) + (busy() ? 0.05 : 0)); }
   if (swoosh) { let best = 0, pan = 0; for (const P of portals) { const v = P.vel.length(); if (v > best) { best = v; pan = P.pos.clone().project(camera).x; } }
-    const walking = ["KeyW", "KeyS", "KeyA", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].some((k) => keys[k]) ? 0.22 : 0;
+    const walking = ["KeyW", "KeyS", "KeyA", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].some((k) => keys[k]) || drag?.walk ? 0.22 : 0;
     setSwoosh(best * 0.9 + Math.min(0.6, Math.abs(yawVel) * 0.08) + walking, pan); }
   for (const P of portals) { const c = P.pos.clone().add(new THREE.Vector3(0, -0.85 * Math.min(P.open, 1), 0)).project(camera), vis = c.z < 1 && P.open > 0.6 && !P.expand && Math.abs(c.x) < 1 && Math.abs(c.y) < 1;
     P.label.style.opacity = vis ? 1 : 0; if (vis) { P.label.style.left = (c.x * 0.5 + 0.5) * innerWidth + "px"; P.label.style.top = (-c.y * 0.5 + 0.5) * innerHeight + "px"; } }

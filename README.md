@@ -16,7 +16,7 @@ Inspired by a portal effect shared by **Ian Curtis ([@XRarchitect](https://x.com
 
 ## Run it
 
-Seven worlds are included in `worlds/`, so it runs straight away. Serve the folder with any static server and open it:
+Eight worlds are included in `worlds/`, so it runs straight away. Serve the folder with any static server and open it:
 
 ```bash
 npx serve .
@@ -28,8 +28,10 @@ npx serve .
 | Click a bubble (tap on a phone) | Grow it and step in |
 | Click anywhere else | Open another bubble there (up to three) |
 | Drag | Look around |
+| Hold still (mouse or finger) | Walk forward; drag while holding to steer |
 | W A S D, Q / E | Walk, and go down and up |
 | Space | Step into the nearest bubble |
+| Walk into a bubble | Go through it |
 | Quality button | Auto, or pick Light, Balanced, High or Full yourself |
 
 Add `?tour` to the URL for an automatic tour, `?quality=light` (or `balanced`, `high`, `full`) to fix the quality, and `?stats` to show the frame rate. To use your own worlds, see [worlds/README.md](worlds/README.md).
@@ -44,8 +46,10 @@ Add `?tour` to the URL for an automatic tour, `?quality=light` (or `balanced`, `
 - **Bubbles bend light.** The view inside warps near the edge, like looking through a real soap film.
 - **Soap bubbles and sparkles** drift off the rim; some sparkles fall and settle on the floor.
 - **Worlds break up and form.** The world you leave scatters; the one you arrive in assembles out of a violet mist.
-- **Walk through, too.** Walking into a bubble takes you through, the same as clicking.
+- **Walk through, too.** Walk up to a bubble and through it, with the keys or by holding still on a phone. Bubbles stay put while you walk towards them, and only drift back into view when you turn away.
 - **A calm soundscape made in the browser.** Each world has its own slow ambient chords and air: the sea on the beach, wind in the desert, a low, dark room in the church. The bubbles whoosh as they move, panned to where they are, and you hear crackles as sparks hit, a wobble, chimes and a rush as you step through. There are no audio files.
+- **Opens fast after the first time.** World files are kept in the browser's cache storage, the rest download quietly in the background, and the worlds one scroll away are decoded ahead of time, so scrolling swaps instantly.
+- **Starts somewhere calm:** a beach pavilion at sunset, with a quiet bay in the first bubble.
 - **Runs on modest devices.** It picks a starting quality from the device's graphics chip, then watches the frame rate and steps up or down by itself.
 
 ## How it works
@@ -142,6 +146,7 @@ Splats are expensive to fill, and every bubble draws a whole extra world each fr
 
 - **Governor:** it keeps a smoothed frame time and steps down after 1.5 seconds below about 33 fps, or 0.6 seconds below 20 fps. It steps back up after 6 seconds above about 52 fps. If a level has had to be abandoned twice, it stops climbing back to it, so it never flips back and forth. Frames while a world is loading are ignored.
 - **Cheaper effects:** the lens pass takes a single sample when nothing is blurring, instead of 84, and fewer samples on lighter levels. The glow on the world around the bubbles is recomputed every 2nd or 4th frame on lighter levels. On Light, each bubble's world redraws every other frame.
+- **Loading:** world files go into Cache Storage the first time they download, so later visits open from disk. Six seconds after the start, the other worlds download one at a time in the background. This doesn't happen on Save-Data or 2G/3G connections, and phones fetch only the next few. The worlds one scroll away from each bubble (two on Full, one on Balanced and High, none on Light) are decoded onto the GPU ahead of time; everything else is freed. The collision grid for sparks is built only when you enter a world, so pre-decoding never stalls the view.
 - **Graceful failure:** if WebGL 2 is missing or the graphics driver resets, the page says so in plain words instead of showing a blank screen.
 
 Measured at 1600×900 on an RTX 4070: 60 fps at every level with one bubble. With three bubbles, 48 fps at Full and 58 fps at Light.
@@ -155,6 +160,6 @@ Measured at 1600×900 on an RTX 4070: 60 fps at every level with one bubble. Wit
 ## Credits and licence
 
 - Code: MIT, see [LICENSE](LICENSE). Built by Simam Digital Ltd.
-- The seven worlds are AI-generated Gaussian splats made by Simam Digital, shared under the same licence.
+- The eight worlds are AI-generated Gaussian splats made by Simam Digital, shared under the same licence.
 - Libraries: [three.js](https://threejs.org) and [Spark](https://sparkjs.dev), both MIT, loaded from a CDN.
 - Inspired by a portal effect shared by Ian Curtis ([@XRarchitect](https://x.com/XRarchitect)) of World Labs.
