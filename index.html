@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Splat Portals</title>
-<meta name="description" content="Walk through portals between Gaussian splat worlds in the browser: a bubble or doorway that shows another world with real parallax, sparkles, and a motion blur jump. Open source from Simam Digital.">
+<meta name="description" content="Floating soap-bubble portals between Gaussian splat worlds in the browser. Scroll a bubble to change the world inside, click it to grow it and step in, click anywhere to open another. Open source from Simam Digital.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -13,7 +13,7 @@
 html, body { height: 100%; margin: 0; background: #06040c; color: var(--fg); font: 15px/1.4 "Space Grotesk", system-ui, "Segoe UI", sans-serif; overflow: hidden; }
 button { font: inherit; color: inherit; cursor: pointer; }
 #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
-#gl:active { cursor: grabbing; }
+#gl.over { cursor: pointer; }
 .glass { background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line); border-radius: 16px; }
 #top { position: fixed; z-index: 5; top: calc(12px + env(safe-area-inset-top, 0px)); left: 12px; right: 12px; display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; }
 #top b { font-weight: 700; letter-spacing: .02em; }
@@ -22,7 +22,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .grow { flex: 1; }
 .btn { border: 1px solid var(--line); background: rgba(255, 255, 255, .07); border-radius: 11px; padding: 8px 13px; font-weight: 500; white-space: nowrap; }
 .btn.on { background: rgba(255, 122, 224, .22); border-color: rgba(255, 122, 224, .6); }
-.btn.hot { background: linear-gradient(120deg, var(--hot), var(--cool)); color: #12081e; border-color: transparent; font-weight: 700; }
 #dock { position: fixed; z-index: 5; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; gap: 8px; align-items: center; padding: 8px; max-width: calc(100% - 24px); overflow-x: auto; scrollbar-width: none; }
 #dock .label { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 0 6px; white-space: nowrap; }
 #worlds { display: flex; gap: 6px; }
@@ -30,6 +29,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #worlds button.next { border-color: var(--cool); background: rgba(122, 216, 255, .16); }
 #worlds button.here { opacity: .45; }
 #hint { position: fixed; z-index: 4; left: 50%; top: calc(74px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); padding: 7px 14px; font-size: 13px; color: var(--muted); transition: opacity .8s; white-space: nowrap; }
+#labels { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+.plabel { position: absolute; transform: translate(-50%, 0); padding: 5px 11px; border-radius: 999px; background: rgba(14, 10, 26, .58); border: 1px solid var(--line); font-size: 12.5px; white-space: nowrap; transition: opacity .3s; }
+.plabel small { color: var(--muted); margin-left: 6px; }
 #title { position: fixed; z-index: 6; inset: 0; display: grid; place-items: center; pointer-events: none; text-align: center; opacity: 0; transition: opacity .6s; }
 #title.on { opacity: 1; }
 #title div { font: 700 clamp(30px, 6vw, 64px)/1 "Space Grotesk", sans-serif; letter-spacing: -.01em; text-shadow: 0 6px 40px rgba(0, 0, 0, .6); }
@@ -39,9 +41,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #load .in { width: min(320px, 80vw); text-align: center; display: flex; flex-direction: column; gap: 12px; }
 #load .bar { height: 3px; background: rgba(255, 255, 255, .12); border-radius: 2px; overflow: hidden; }
 #load .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--hot), var(--cool)); }
-#credit { position: fixed; z-index: 4; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); font-size: 11px; color: rgba(255, 255, 255, .55); text-align: right; }
+#credit { position: fixed; z-index: 4; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); font-size: 11px; color: rgba(255, 255, 255, .6); text-align: right; max-width: calc(100% - 24px); }
 #credit a { color: inherit; }
-@media (max-width: 760px) { #top { flex-wrap: wrap; gap: 6px; } #top .where { display: none; } #top .grow { flex-basis: 100%; height: 0; } .btn { padding: 7px 10px; font-size: 13px; } #hint { font-size: 12px; top: calc(118px + env(safe-area-inset-top, 0px)); white-space: normal; width: max-content; max-width: calc(100% - 24px); text-align: center; } #top b span { display: none; } #credit { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); } }
+@media (max-width: 760px) {
+  #top { flex-wrap: wrap; gap: 6px; } #top .where { display: none; } #top .grow { flex-basis: 100%; height: 0; } .btn { padding: 7px 10px; font-size: 13px; }
+  #hint { font-size: 12px; top: calc(118px + env(safe-area-inset-top, 0px)); white-space: normal; width: max-content; max-width: calc(100% - 24px); text-align: center; }
+  #top b span { display: none; } #credit { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
+}
 </style>
 <script type="importmap">
 { "imports": {
@@ -52,18 +58,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 </script>
 </head>
 <body>
-<canvas id="gl" aria-label="Gaussian splat worlds joined by a portal"></canvas>
+<canvas id="gl" aria-label="Gaussian splat worlds joined by floating bubble portals"></canvas>
+<div id="labels"></div>
 <header id="top" class="glass">
   <b>Splat Portals<span> · Simam Digital</span></b>
   <span class="where">You are in <i id="here">…</i></span>
   <div class="grow"></div>
-  <button class="btn on" id="shapeBubble">Bubble</button><button class="btn" id="shapeDoor">Doorway</button>
+  <button class="btn on" data-shape="0">Blob</button><button class="btn" data-shape="1">Bubble</button><button class="btn" data-shape="2">Doorway</button>
   <button class="btn" id="tourBtn">Auto tour</button>
   <button class="btn" id="soundBtn" aria-pressed="false">Sound off</button>
-  <button class="btn hot" id="jumpBtn">Step through</button>
 </header>
-<div id="hint" class="glass">Drag to look · W A S D to walk · click a wall or floor to open a portal there · walk in, or press Space</div>
-<div id="dock" class="glass"><span class="label">Portal to</span><div id="worlds"></div></div>
+<div id="hint" class="glass">Scroll on a bubble to change its world · click it to step in · click anywhere to open another · drag to look, W A S D to walk</div>
+<div id="dock" class="glass"><span class="label">Nearest bubble</span><div id="worlds"></div></div>
 <div id="title"><div id="titleT"></div><small id="titleS"></small></div>
 <div id="credit">Inspired by <a href="https://x.com/XRarchitect" target="_blank" rel="noopener">Ian Curtis (@XRarchitect)</a> of World Labs · Open source on <a href="https://github.com/Simam-Digital-Ltd/splat-portals" target="_blank" rel="noopener">GitHub</a> · AI-generated worlds by Simam Digital</div>
 <div id="load"><div class="in"><b>Opening the first world</b><div class="bar"><i id="loadBar"></i></div><span id="loadMsg" style="color:var(--muted);font-size:13px">Loading splats</span></div></div>
@@ -75,34 +81,32 @@ import { SparkRenderer, SplatMesh, dyno } from "@sparkjsdev/spark";
 const BASE = location.pathname.includes("/demos/") ? "/demos/portals/" : "./";
 const Q = new URLSearchParams(location.search), DEBUG = Q.has("debug");
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const PHONE = matchMedia("(pointer: coarse)").matches;
+const MAXP = PHONE ? 2 : 3;   // bubbles at once (each one draws a whole extra world every frame)
 const $ = (id) => document.getElementById(id);
+const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 
-// ---------- the worlds (AI-generated Gaussian splats; each starts at the origin looking down -z) ----------
+// ---------- the worlds (AI-generated Gaussian splats). flip: stored y-down, so turn it the right way up ----------
 const WORLDS = [
-  { id: "bedroom", name: "Sunlit bedroom", file: "worlds/bedroom.sog" },
-  { id: "pavilion", name: "Beach pavilion", file: "worlds/pavilion.sog" },
-  { id: "gallery", name: "Sculpture gallery", file: "worlds/gallery.sog" },
-  { id: "tombs", name: "Desert tombs", file: "worlds/tombs.sog" },
-  { id: "church", name: "Old church", file: "worlds/church.sog" },
-  { id: "pyramids", name: "Pyramids", file: "worlds/pyramids.sog" },
-  { id: "rock-tomb", name: "Rock-cut tomb", file: "worlds/rock-tomb.sog" },
+  { id: "bedroom", name: "Sunlit bedroom", file: "worlds/bedroom.sog", flip: true },
+  { id: "pavilion", name: "Beach pavilion", file: "worlds/pavilion.sog", flip: false },
+  { id: "gallery", name: "Sculpture gallery", file: "worlds/gallery.sog", flip: false },
+  { id: "tombs", name: "Desert tombs", file: "worlds/tombs.sog", flip: false },
+  { id: "church", name: "Old church", file: "worlds/church.sog", flip: true },
+  { id: "pyramids", name: "Pyramids", file: "worlds/pyramids.sog", flip: false },
+  { id: "rock-tomb", name: "Rock-cut tomb", file: "worlds/rock-tomb.sog", flip: false },
 ];
+if (Q.has("flips")) Q.get("flips").split("").forEach((c, i) => WORLDS[i] && (WORLDS[i].flip = c === "1"));
 
-// ---------- renderer, cameras, render targets ----------
+// ---------- renderer ----------
 const canvas = $("gl");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: DEBUG });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
-const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 2000);   // you
-const camB = new THREE.PerspectiveCamera(70, 1, 0.05, 2000);     // the matching camera on the far side of the portal
-const rtB = new THREE.WebGLRenderTarget(1, 1), rtMain = new THREE.WebGLRenderTarget(1, 1);
-function resize() {
-  const w = innerWidth, h = innerHeight, pr = renderer.getPixelRatio();
-  renderer.setSize(w, h, false); for (const c of [camera, camB]) { c.aspect = w / h; c.updateProjectionMatrix(); }
-  rtB.setSize(Math.round(w * pr), Math.round(h * pr)); rtMain.setSize(Math.round(w * pr), Math.round(h * pr));
-  postMat.uniforms.uRes.value.set(w * pr, h * pr); portalMat.uniforms.uRes.value.set(w * pr, h * pr);
-}
+renderer.setPixelRatio(Math.min(devicePixelRatio, PHONE ? 1.4 : 1.75));
+const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 2000);
+const rtMain = new THREE.WebGLRenderTarget(1, 1);
+const res = new THREE.Vector2(1, 1);
 
-// ---------- each world lives in its own scene with its own SparkRenderer (so each sorts for its own camera) ----------
+// ---------- each world: its own scene and SparkRenderer, so each sorts for its own camera ----------
 const cache = new Map();
 async function fetchBytes(url, onProg) {
   const r = await fetch(url); if (!r.ok) throw new Error(url + " " + r.status);
@@ -113,26 +117,22 @@ async function fetchBytes(url, onProg) {
 function loadWorld(i, onProg) {
   if (cache.has(i)) return cache.get(i);
   const p = (async () => {
-    const W = WORLDS[i], scene = new THREE.Scene(); scene.background = new THREE.Color(0x06040c); scene.add(new SparkRenderer({ renderer }));
+    const W = WORLDS[i], scene = new THREE.Scene(); scene.background = new THREE.Color(0x06040c); const spark = new SparkRenderer({ renderer }); scene.add(spark);
     const mesh = new SplatMesh({ fileBytes: await fetchBytes(BASE + W.file, onProg), fileType: "pcsogszip" });
     await mesh.initialized;
-    mesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);   // splat files are y-down, z-forward
-    // per-world uniforms: clip plane (used only when seen through a portal), burst (splats fly apart), shimmer near the portal
+    if (W.flip) mesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
     const U = { clip: dyno.dynoVec4(new THREE.Vector4(0, 0, 0, -1e9)), burst: dyno.dynoFloat(0), bp: dyno.dynoVec3(new THREE.Vector3()), glowP: dyno.dynoVec3(new THREE.Vector3(1e9, 0, 0)), glowR: dyno.dynoFloat(0), t: dyno.dynoFloat(0) };
     mesh.objectModifier = dyno.dynoBlock({ gsplat: dyno.Gsplat }, { gsplat: dyno.Gsplat }, ({ gsplat }) => {
       const d = new dyno.Dyno({ inTypes: { gsplat: dyno.Gsplat, clip: "vec4", burst: "float", bp: "vec3", gp: "vec3", gr: "float", t: "float" }, outTypes: { gsplat: dyno.Gsplat },
         statements: ({ inputs: i, outputs: o }) => dyno.unindentLines(`
           ${o.gsplat} = ${i.gsplat};
           vec3 p = ${i.gsplat}.center;
-          // seen through a portal: hide everything on the near side of the portal plane
           float side = dot(${i.clip}.xyz, p) + ${i.clip}.w;
           ${o.gsplat}.rgba.a *= 1.0 - smoothstep(-0.04, 0.0, side);
-          // shimmer: splats close to the open portal pick up a violet sparkle
           float dg = distance(p, ${i.gp});
           float ring = exp(-pow((dg - ${i.gr}) * 2.2, 2.0));
           float tw = 0.5 + 0.5 * sin(${i.t} * 7.0 + dot(p, vec3(91.7, 47.3, 13.1)));
-          ${o.gsplat}.rgba.rgb += vec3(0.75, 0.35, 1.0) * ring * tw * 0.35;
-          // burst: the world you leave breaks into drifting sparkles
+          ${o.gsplat}.rgba.rgb += vec3(0.75, 0.35, 1.0) * ring * tw * 0.3;
           if (${i.burst} > 0.0) {
             float h = fract(sin(dot(p, vec3(12.99, 78.23, 37.71))) * 43758.55);
             vec3 dir = normalize(p - ${i.bp} + vec3(h - 0.5, fract(h * 7.1) - 0.5, fract(h * 3.7) - 0.5));
@@ -144,283 +144,338 @@ function loadWorld(i, onProg) {
       return { gsplat: d.apply({ gsplat, clip: U.clip, burst: U.burst, bp: U.bp, gp: U.glowP, gr: U.glowR, t: U.t }).gsplat };
     });
     mesh.updateGenerator(); scene.add(mesh); scene.updateMatrixWorld(true);
-    return { i, scene, mesh, U };
+    return { i, scene, spark, mesh, U };
   })();
   cache.set(i, p); return p;
 }
-function setClip(w, on, side = 1) {   // the portal plane on the arrival side is z = 0 (world); keep the far side of it from the viewer
-  w.U.clipSide = side;
+async function evict() {   // keep the GPU light: the world you are in, the bubbles' worlds, and one spare
+  const keep = new Set([here, ...portals.map((p) => p.w)]);
+  for (const [i, pr] of [...cache]) {
+    if (cache.size <= keep.size + 1) break;
+    if (keep.has(i)) continue;
+    cache.delete(i); try { const w = await pr; w.mesh.dispose?.(); w.spark.dispose?.(); } catch {}
+  }
+}
+function setClip(w, on) {   // seen through a bubble: hide what lies between the far camera and the far portal (world z > 0)
   if (!on) { w.U.clip.value.set(0, 0, 0, -1e9); w.mesh.updateVersion(); return; }
-  const pl = new THREE.Plane(new THREE.Vector3(0, 0, side), 0).applyMatrix4(w.mesh.matrixWorld.clone().invert());
+  const pl = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0).applyMatrix4(w.mesh.matrixWorld.clone().invert());
   w.U.clip.value.set(pl.normal.x, pl.normal.y, pl.normal.z, pl.constant); w.mesh.updateVersion();
 }
-function setGlow(w, pWorld, r) { const pl = pWorld ? pWorld.clone().applyMatrix4(w.mesh.matrixWorld.clone().invert()) : new THREE.Vector3(1e9, 0, 0); w.U.glowP.value.copy(pl); w.U.glowR.value = r; }
+const toLocal = (w, v) => v.clone().applyMatrix4(w.mesh.matrixWorld.clone().invert());
 
-// ---------- the portal: a surface that shows the other world, an iridescent rim, sparkles ----------
-const fx = new THREE.Scene();
-const portal = new THREE.Group(); fx.add(portal);
-const portalMat = new THREE.ShaderMaterial({
-  transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
-  uniforms: { tB: { value: rtB.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uT: { value: 0 }, uOpen: { value: 0 }, uShape: { value: 0 }, uLoading: { value: 0 } },
-  vertexShader: `varying vec2 vP; void main() { vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: `
-    uniform sampler2D tB; uniform vec2 uRes; uniform float uT, uOpen, uShape, uLoading; varying vec2 vP;
-    float h(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
-    float n3(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-      return mix(mix(mix(h(i), h(i + vec3(1,0,0)), f.x), mix(h(i + vec3(0,1,0)), h(i + vec3(1,1,0)), f.x), f.y),
-                 mix(mix(h(i + vec3(0,0,1)), h(i + vec3(1,0,1)), f.x), mix(h(i + vec3(0,1,1)), h(i + vec3(1,1,1)), f.x), f.y), f.z); }
-    float fbm(vec3 p) { return 0.55 * n3(p) + 0.3 * n3(p * 2.1) + 0.15 * n3(p * 4.3); }
-    float sdBox(vec2 p, vec2 b, float r) { vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
-    vec3 film(float x) { return 0.55 + 0.45 * cos(6.2831 * (x + vec3(0.0, 0.33, 0.67))); }
-    void main() {
-      vec2 p = vP; float ang = atan(p.y, p.x);
-      float open = uOpen;
-      float d;
-      if (uShape < 0.5) { float R = 0.62 * open; R += 0.018 * sin(ang * 3.0 + uT * 2.1) + 0.012 * sin(ang * 5.0 - uT * 1.3); d = length(p) - R; }
-      else { d = sdBox(p, vec2(0.62, 0.98) * open, 0.18 * open); d += (fbm(vec3(p * 5.0, uT * 0.7)) - 0.5) * 0.13 * open; }
-      float inside = (1.0 - smoothstep(-0.012, 0.012, d)) * step(0.02, open) * (1.0 - uLoading);
-      vec2 suv = gl_FragCoord.xy / uRes;
-      if (uShape < 0.5) suv += normalize(p + 1e-4) * smoothstep(-0.22, 0.0, d) * 0.035 * open * vec2(uRes.y / uRes.x, 1.0);   // the bubble bends light at its edge
-      vec3 world = texture2D(tB, suv).rgb;
-      vec3 col = world * inside;
-      float a = inside;
-      if (uShape < 0.5) {
-        // soap-bubble: thin-film rainbow at the edge, a soft fresnel tint inside, one bright highlight
-        float rim = exp(-abs(d) * 75.0) * step(0.02, open);
-        float fres = smoothstep(-0.28, 0.0, d) * inside;
-        vec3 tf = film(ang / 6.2831 * 1.4 + uT * 0.15 + length(p) * 1.5);
-        col += tf * (rim * 1.25 + fres * 0.3);
-        vec2 hl = p - vec2(-0.22, 0.24) * open; col += vec3(1.0) * exp(-dot(hl, hl) * 260.0) * 1.4 * inside;
-        float glow = exp(-max(d, 0.0) * 9.0) * 0.18 * step(0.02, open);
-        col += vec3(0.85, 0.45, 1.0) * glow;
-        a = max(a, rim * 0.85);
-      } else {
-        // doorway: a white-hot ragged rim fading to violet and blue
-        float core = exp(-abs(d) * 55.0), halo = exp(-max(d, 0.0) * 11.0) * step(0.0, d);
-        vec3 c = mix(vec3(1.0, 0.55, 0.95), vec3(0.55, 0.85, 1.0), 0.5 + 0.5 * sin(ang * 2.0 + uT));
-        col += vec3(1.0, 0.97, 1.0) * core * 1.6 + c * halo * 0.7;
-        a = max(a, core * 0.95);
-      }
-      if (uLoading > 0.5) { float sw = exp(-pow(length(p) - 0.45 - 0.05 * sin(ang * 6.0 + uT * 4.0), 2.0) * 200.0); col += film(ang / 6.28 + uT * 0.3) * sw; a = max(a, sw * 0.8); }
-      gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
-    }`,
-});
-const surface = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), portalMat); surface.renderOrder = 1; portal.add(surface);
-
-// sparkles that swirl round the rim, spill out and settle on the floor
-const N = REDUCED ? 600 : 3400, seeds = new Float32Array(N * 4);
-for (let i = 0; i < N; i++) seeds.set([Math.random(), Math.random(), Math.random(), Math.random()], i * 4);
-const pg = new THREE.BufferGeometry(); pg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(N * 3), 3)); pg.setAttribute("seed", new THREE.BufferAttribute(seeds, 4));
-const sparkMat = new THREE.ShaderMaterial({
-  transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
-  uniforms: { uT: { value: 0 }, uOpen: { value: 0 }, uShape: { value: 0 }, uPx: { value: 800 }, uFloor: { value: -1.2 }, uBoost: { value: 0 } },
-  vertexShader: `
-    attribute vec4 seed; uniform float uT, uOpen, uShape, uPx, uFloor, uBoost; varying float vA; varying vec3 vC;
-    vec2 rim(float a) {
-      if (uShape < 0.5) return vec2(cos(a), sin(a)) * 0.62;
-      vec2 b = vec2(0.62, 0.98); vec2 d = vec2(cos(a), sin(a)); float s = min(b.x / max(abs(d.x), 1e-3), b.y / max(abs(d.y), 1e-3)); return d * s;
+// ---------- shaders shared by every bubble ----------
+const PORTAL_FS = `
+  uniform sampler2D tB; uniform vec2 uRes; uniform float uT, uOpen, uShape, uLoading, uSeed, uFlash; varying vec2 vP;
+  float h(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+  float n3(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(h(i), h(i + vec3(1,0,0)), f.x), mix(h(i + vec3(0,1,0)), h(i + vec3(1,1,0)), f.x), f.y),
+               mix(mix(h(i + vec3(0,0,1)), h(i + vec3(1,0,1)), f.x), mix(h(i + vec3(0,1,1)), h(i + vec3(1,1,1)), f.x), f.y), f.z); }
+  float fbm(vec3 p) { return 0.55 * n3(p) + 0.3 * n3(p * 2.1) + 0.15 * n3(p * 4.3); }
+  float sdBox(vec2 p, vec2 b, float r) { vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+  vec3 film(float x) { return 0.55 + 0.45 * cos(6.2831 * (x + vec3(0.0, 0.33, 0.67))); }
+  void main() {
+    vec2 p = vP; float ang = atan(p.y, p.x), open = uOpen, d;
+    if (uShape < 0.5) {   // blob: an organic, slowly breathing outline
+      vec2 cs = vec2(cos(ang), sin(ang));
+      float wob = fbm(vec3(cs * 1.4 + uSeed, uT * 0.33)) - 0.5, wob2 = fbm(vec3(cs * 3.1 - uSeed, uT * 0.6)) - 0.5;
+      float R = 0.74 * open * (1.0 + 0.32 * wob + 0.12 * wob2);
+      d = length(p) - R;
+    } else if (uShape < 1.5) { float R = 0.66 * open; R += 0.02 * sin(ang * 3.0 + uT * 2.1) + 0.012 * sin(ang * 5.0 - uT * 1.3); d = length(p) - R; }
+    else { d = sdBox(p, vec2(0.62, 0.98) * open, 0.18 * open); d += (fbm(vec3(p * 5.0, uT * 0.7)) - 0.5) * 0.13 * open; }
+    float alive = step(0.02, open), inside = (1.0 - smoothstep(-0.015, 0.015, d)) * alive * (1.0 - uLoading);
+    vec2 suv = gl_FragCoord.xy / uRes;
+    if (uShape < 1.5) suv += normalize(p + 1e-4) * smoothstep(-0.25, 0.0, d) * 0.04 * min(open, 1.5) * vec2(uRes.y / uRes.x, 1.0);   // lens bend near the edge
+    vec3 col = texture2D(tB, suv).rgb * inside;
+    float a = inside;
+    if (uShape < 1.5) {
+      // soap film: a soft rainbow halo just outside, a thin bright rim, a tint just inside, one highlight
+      float rim = exp(-abs(d) * 60.0) * alive, halo = exp(-max(d, 0.0) * 14.0) * step(0.0, d) * alive, fres = smoothstep(-0.3, 0.0, d) * inside;
+      vec3 tf = film(ang / 6.2831 * 1.3 + uT * 0.12 + length(p) * 1.4 + uSeed);
+      col += tf * (rim * 1.2 + fres * 0.32) + mix(vec3(1.0, 0.55, 0.95), vec3(0.6, 0.85, 1.0), 0.5 + 0.5 * sin(ang * 2.0 + uT)) * halo * 0.55;
+      vec2 hl = p - vec2(-0.24, 0.27) * min(open, 1.0); col += vec3(1.0) * exp(-dot(hl, hl) * 220.0) * 1.3 * inside;
+      a = max(a, max(rim * 0.85, halo * 0.45));
+    } else {
+      float core = exp(-abs(d) * 55.0), halo = exp(-max(d, 0.0) * 11.0) * step(0.0, d);
+      vec3 c = mix(vec3(1.0, 0.55, 0.95), vec3(0.55, 0.85, 1.0), 0.5 + 0.5 * sin(ang * 2.0 + uT));
+      col += vec3(1.0, 0.97, 1.0) * core * 1.6 + c * halo * 0.7; a = max(a, core * 0.95);
     }
-    void main() {
-      float life = 1.6 + seed.y * 2.2, t = fract(uT / life + seed.x), a = seed.z * 6.2831 + uT * (0.35 + seed.w * 0.6) * (seed.w > 0.5 ? 1.0 : -1.0);
-      vec2 r = rim(a) * uOpen;
+    if (uLoading > 0.5) { float sw = exp(-pow(length(p) - 0.45 - 0.05 * sin(ang * 6.0 + uT * 4.0), 2.0) * 200.0); col += film(ang / 6.28 + uT * 0.3) * sw; a = max(a, sw * 0.8); }
+    col += vec3(1.0, 0.85, 1.0) * uFlash * inside;
+    gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
+  }`;
+const SPARK_VS = `
+  attribute vec4 seed; uniform float uT, uOpen, uShape, uPx, uFloor, uBoost; varying float vA, vKind; varying vec3 vC;
+  vec2 rim(float a) {
+    if (uShape < 1.5) return vec2(cos(a), sin(a)) * 0.72;
+    vec2 b = vec2(0.62, 0.98); vec2 d = vec2(cos(a), sin(a)); float s = min(b.x / max(abs(d.x), 1e-3), b.y / max(abs(d.y), 1e-3)); return d * s;
+  }
+  void main() {
+    float bubble = step(seed.w, 0.09);   // a few soap bubbles drift away, the rest are sparkles
+    float life = mix(1.6 + seed.y * 2.2, 3.5 + seed.y * 3.0, bubble), t = fract(uT / life + seed.x);
+    float a = seed.z * 6.2831 + uT * (0.35 + seed.w * 0.6) * (seed.w > 0.5 ? 1.0 : -1.0);
+    vec2 r = rim(a) * min(uOpen, 1.4);
+    vec3 p;
+    if (bubble > 0.5) { p = vec3(r * (1.0 + t * 0.4), (seed.y - 0.5) * 0.4 + t * 0.5); p.y += t * (0.5 + seed.x * 0.8); p.x += sin(uT * 1.3 + seed.z * 20.0) * 0.08 * t; }
+    else {
       vec2 out2 = normalize(r + 1e-4) * (0.04 + 0.5 * t * seed.w);
-      vec3 p = vec3(r + out2, (seed.y - 0.5) * 0.16 + t * (seed.x - 0.5) * 0.6);
-      float spill = step(0.62, seed.w);                       // some fall and settle on the floor
-      p.y -= spill * t * t * 2.6; p.y = max(p.y, uFloor + 0.01 * seed.z);
-      p.xz += spill * vec2(seed.z - 0.5, seed.x - 0.5) * t * 0.9;
-      vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
-      float tw = 0.55 + 0.45 * sin(uT * (9.0 + seed.y * 14.0) + seed.x * 40.0);
-      vA = (1.0 - t) * smoothstep(0.0, 0.08, t) * tw * min(uOpen * 1.5, 1.0) * (1.0 + uBoost);
-      vC = mix(vec3(1.0, 0.45, 0.95), vec3(0.6, 0.85, 1.0), seed.z); vC = mix(vC, vec3(1.0), step(0.8, seed.y));
-      gl_PointSize = clamp((0.010 + 0.022 * seed.y) * (1.0 + uBoost * 1.5) * uPx / -mv.z, 1.0, 14.0);
-    }`,
-  fragmentShader: `varying float vA; varying vec3 vC; void main() { vec2 d = gl_PointCoord - 0.5; float r = dot(d, d) * 4.0; if (r > 1.0) discard; gl_FragColor = vec4(vC * (exp(-r * 6.0) + 0.25 * exp(-r * 1.5)) * vA, 1.0); }`,
-});
-const sparks = new THREE.Points(pg, sparkMat); sparks.frustumCulled = false; sparks.renderOrder = 2; portal.add(sparks);
+      p = vec3(r + out2, (seed.y - 0.5) * 0.16 + t * (seed.x - 0.5) * 0.6);
+      float spill = step(0.64, seed.w); p.y -= spill * t * t * 2.6; p.y = max(p.y, uFloor + 0.01 * seed.z); p.xz += spill * vec2(seed.z - 0.5, seed.x - 0.5) * t * 0.9;
+    }
+    vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
+    float tw = mix(0.55 + 0.45 * sin(uT * (9.0 + seed.y * 14.0) + seed.x * 40.0), 1.0, bubble);
+    vA = (1.0 - t) * smoothstep(0.0, 0.08, t) * tw * min(uOpen * 1.5, 1.0) * (1.0 + uBoost); vKind = bubble;
+    vC = mix(vec3(1.0, 0.45, 0.95), vec3(0.6, 0.85, 1.0), seed.z); vC = mix(vC, vec3(1.0), step(0.8, seed.y));
+    float sz = mix(0.010 + 0.022 * seed.y, 0.05 + 0.09 * seed.y, bubble);
+    gl_PointSize = clamp(sz * (1.0 + uBoost * 1.5) * uPx / -mv.z, 1.0, mix(14.0, 64.0, bubble));
+  }`;
+const SPARK_FS = `varying float vA, vKind; varying vec3 vC;
+  void main() { vec2 d = gl_PointCoord - 0.5; float r = length(d) * 2.0; if (r > 1.0) discard;
+    if (vKind > 0.5) { float ring = smoothstep(0.74, 0.86, r) * (1.0 - smoothstep(0.9, 1.0, r)); float ang = atan(d.y, d.x);
+      vec3 film = 0.55 + 0.45 * cos(6.2831 * (ang / 6.2831 + r + vec3(0.0, 0.33, 0.67)));
+      vec2 hl = d - vec2(-0.18, 0.18); float spec = exp(-dot(hl, hl) * 160.0);
+      gl_FragColor = vec4((film * ring * 0.9 + vec3(1.0) * spec * 0.9 + film * 0.06) * vA, 1.0); return; }
+    float q = r * r; gl_FragColor = vec4(vC * (exp(-q * 6.0) + 0.25 * exp(-q * 1.5)) * vA, 1.0); }`;
+const NS = REDUCED ? 500 : PHONE ? 1600 : 3000;
+const seeds = new Float32Array(NS * 4); for (let i = 0; i < NS * 4; i++) seeds[i] = Math.random();
+const sparkGeo = new THREE.BufferGeometry(); sparkGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(NS * 3), 3)); sparkGeo.setAttribute("seed", new THREE.BufferAttribute(seeds, 4));
+const quad = new THREE.PlaneGeometry(4.2, 4.2);
 
-// ---------- final pass: radial motion blur, chromatic split and a flash for the jump ----------
+// ---------- bubbles ----------
+const fx = new THREE.Scene();
+const portals = [];
+let shape = 0;
+function makePortal(w, at) {
+  const P = { w, B: null, loading: true, rt: new THREE.WebGLRenderTarget(1, 1), camB: new THREE.PerspectiveCamera(70, 1, 0.05, 2000),
+    group: new THREE.Group(), pos: at.clone(), vel: new THREE.Vector3(), anchor: at.clone(), yaw: 0,
+    open: 0, opening: { t0: performance.now(), from: 0 }, expand: null, seed: Math.random() * 10, flash: 0, PA: new THREE.Matrix4(), PAinv: new THREE.Matrix4(), prevZ: 1, label: document.createElement("div") };
+  P.yaw = Math.atan2(pos.x - at.x, pos.z - at.z);
+  P.rt.setSize(res.x, res.y);
+  P.mat = new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+    uniforms: { tB: { value: P.rt.texture }, uRes: { value: res }, uT: { value: 0 }, uOpen: { value: 0 }, uShape: { value: shape }, uLoading: { value: 1 }, uSeed: { value: P.seed }, uFlash: { value: 0 } },
+    vertexShader: `varying vec2 vP; void main() { vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: PORTAL_FS });
+  P.sparkMat = new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uT: { value: 0 }, uOpen: { value: 0 }, uShape: { value: shape }, uPx: { value: 800 }, uFloor: { value: -1.2 }, uBoost: { value: 0 } }, vertexShader: SPARK_VS, fragmentShader: SPARK_FS });
+  P.surface = new THREE.Mesh(quad, P.mat); P.surface.renderOrder = 1;
+  P.sparks = new THREE.Points(sparkGeo, P.sparkMat); P.sparks.frustumCulled = false; P.sparks.renderOrder = 2;
+  P.group.add(P.surface, P.sparks); fx.add(P.group);
+  P.label.className = "plabel"; $("labels").append(P.label);
+  portals.push(P); setWorld(P, w); sfxChime(); return P;
+}
+function removePortal(P) {
+  const k = portals.indexOf(P); if (k >= 0) portals.splice(k, 1);
+  fx.remove(P.group); P.rt.dispose(); P.mat.dispose(); P.sparkMat.dispose(); P.label.remove();
+}
+async function setWorld(P, w) {
+  P.w = w; P.loading = true; P.mat.uniforms.uLoading.value = 1; P.label.innerHTML = `${WORLDS[w].name}<small>loading</small>`; updateDock();
+  const world = await loadWorld(w); if (P.w !== w || !portals.includes(P)) return;
+  P.B = world; setClip(world, true); P.loading = false; P.mat.uniforms.uLoading.value = 0; P.flash = 1; label(P); updateDock(); evict();
+}
+function label(P) { P.label.innerHTML = `${WORLDS[P.w].name}<small>${PHONE ? "swipe to change · tap to enter" : "scroll to change · click to enter"}</small>`; }
+const used = () => new Set([here, ...portals.map((p) => p.w)]);
+function freeWorld(from, dir = 1) { const u = used(); for (let k = 1; k <= WORLDS.length; k++) { const i = (((from + dir * k) % WORLDS.length) + WORLDS.length) % WORLDS.length; if (!u.has(i)) return i; } return null; }
+function cycle(P, dir) { const u = used(); u.delete(P.w); for (let k = 1; k <= WORLDS.length; k++) { const i = (((P.w + dir * k) % WORLDS.length) + WORLDS.length) % WORLDS.length; if (!u.has(i)) { setWorld(P, i); sfxBlip(); return; } } }
+function setShape(s) { shape = s; for (const P of portals) { P.mat.uniforms.uShape.value = s; P.sparkMat.uniforms.uShape.value = s; } for (const b of document.querySelectorAll("[data-shape]")) b.classList.toggle("on", +b.dataset.shape === s); }
+for (const b of document.querySelectorAll("[data-shape]")) b.onclick = () => setShape(+b.dataset.shape);
+
+// ---------- final pass: radial motion blur, chromatic split, flash ----------
 const postMat = new THREE.ShaderMaterial({
-  uniforms: { tMain: { value: rtMain.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uBlur: { value: 0 }, uFlash: { value: 0 }, uC: { value: new THREE.Vector2(0.5, 0.5) } },
+  uniforms: { tMain: { value: rtMain.texture }, uBlur: { value: 0 }, uFlash: { value: 0 }, uC: { value: new THREE.Vector2(0.5, 0.5) } },
   vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
   fragmentShader: `
     uniform sampler2D tMain; uniform float uBlur, uFlash; uniform vec2 uC; varying vec2 vUv;
     void main() {
       vec2 dir = vUv - uC; vec3 acc = vec3(0.0); float w = 0.0;
-      const int S = 28;
-      for (int i = 0; i < S; i++) { float k = float(i) / float(S - 1), s = 1.0 - uBlur * k, wt = 1.0 - k * 0.6;
+      for (int i = 0; i < 28; i++) { float k = float(i) / 27.0, s = 1.0 - uBlur * k, wt = 1.0 - k * 0.6;
         acc.r += texture2D(tMain, uC + dir * (s - uBlur * 0.06)).r * wt; acc.g += texture2D(tMain, uC + dir * s).g * wt; acc.b += texture2D(tMain, uC + dir * (s + uBlur * 0.06)).b * wt; w += wt; }
-      vec3 col = acc / w;
-      float v = smoothstep(1.15, 0.35, length(dir) * (1.0 + uBlur * 1.2)); col *= mix(1.0, v, 0.35 + uBlur * 0.6);
-      col += vec3(1.0, 0.82, 1.0) * uFlash;
-      gl_FragColor = vec4(col, 1.0);
+      vec3 col = acc / w; float v = smoothstep(1.15, 0.35, length(dir) * (1.0 + uBlur * 1.2)); col *= mix(1.0, v, 0.35 + uBlur * 0.6);
+      gl_FragColor = vec4(col + vec3(1.0, 0.82, 1.0) * uFlash, 1.0);
     }`,
 });
 const post = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 post.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat));
+function resize() {
+  const w = innerWidth, h = innerHeight, pr = renderer.getPixelRatio();
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  res.set(Math.round(w * pr), Math.round(h * pr)); rtMain.setSize(res.x, res.y); for (const P of portals) P.rt.setSize(res.x, res.y);
+}
 addEventListener("resize", resize); resize();
 
-// ---------- you: drag to look, WASD to walk ----------
-let yaw = 0, pitch = -0.06; const pos = new THREE.Vector3(0, 0, 0), keys = {};
-function applyCam() { camera.position.copy(pos); camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, "YXZ")); camera.updateMatrixWorld(); }
-let drag = null;
-canvas.addEventListener("pointerdown", (e) => { drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); stopTour(); });
-canvas.addEventListener("pointermove", (e) => { if (!drag || jump) return; yaw -= (e.clientX - drag[0]) * 0.0042; pitch = Math.max(-1.3, Math.min(1.3, pitch - (e.clientY - drag[1]) * 0.0042)); drag = [e.clientX, e.clientY]; });
-let downAt = null;
-canvas.addEventListener("pointerdown", (e) => (downAt = [e.clientX, e.clientY]));
-canvas.addEventListener("pointerup", (e) => {
-  drag = null; if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6 || jump || !A || !B) return;
-  const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
-  let hit = null; try { hit = ray.intersectObject(A.mesh, false).find((h) => h.distance > 0.8 && h.distance < 12); } catch {}
-  const at = hit ? hit.point : ray.ray.at(2.4, new THREE.Vector3());
-  placePortal(at); opening = { t0: performance.now(), from: 0 }; sfxChime();
-});
-canvas.addEventListener("wheel", (e) => { if (!jump) { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).setY(0).normalize(); pos.addScaledVector(f, -e.deltaY * 0.0025); } }, { passive: true });
-addEventListener("keydown", (e) => { keys[e.code] = true; if (e.code === "Space") { e.preventDefault(); startJump(); } if (/^Digit[1-7]$/.test(e.code)) chooseNext(+e.code.slice(5) - 1); });
-addEventListener("keyup", (e) => (keys[e.code] = false));
-
-// ---------- state ----------
-let arrive = null, bob = 0; const base = new THREE.Vector3();
-let A = null, B = null, here = 0, next = 1, shape = 0, open = 0, opening = null, jump = null, flash = 0;
-const PA = new THREE.Matrix4(), PAinv = new THREE.Matrix4();
-function placePortal(at) {   // 2.2 m ahead of you (or where you clicked), a little below eye height, facing you
-  const f = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-  if (at) { base.copy(at); const toMe = pos.clone().sub(at).setY(0), dist = toMe.length(); base.addScaledVector(toMe.normalize(), Math.min(0.35, dist * 0.3)); base.y = Math.min(Math.max(base.y, pos.y - 0.8), pos.y + 0.3); }
-  else base.copy(pos).addScaledVector(f, 2.2).add(new THREE.Vector3(0, -0.22, 0));
-  const face = Math.atan2(pos.x - base.x, pos.z - base.z);
-  portal.position.copy(base); portal.rotation.set(0, at ? face : yaw, 0); portal.updateMatrixWorld(true);
-  PA.copy(portal.matrixWorld); PAinv.copy(PA).invert();
-}
-const localOf = (v) => v.clone().applyMatrix4(PAinv);
-function updateDock() {
-  $("here").textContent = WORLDS[here].name;
-  for (const b of $("worlds").children) { const i = +b.dataset.i; b.classList.toggle("here", i === here); b.classList.toggle("next", i === next); }
-}
-async function chooseNext(i) {
-  if (i === here || jump || i < 0 || i >= WORLDS.length) return;
-  next = i; updateDock(); portalMat.uniforms.uLoading.value = 1; open = Math.min(open, 0.5);
-  const w = await loadWorld(i); if (next !== i) return;
-  B = w; setClip(B, true); portalMat.uniforms.uLoading.value = 0; opening = { t0: performance.now(), from: open };
-}
-for (const [i, W] of WORLDS.entries()) { const b = document.createElement("button"); b.textContent = W.name; b.dataset.i = i; b.onclick = () => chooseNext(i); $("worlds").append(b); }
-function setShape(s) { shape = s; portalMat.uniforms.uShape.value = s; sparkMat.uniforms.uShape.value = s; $("shapeBubble").classList.toggle("on", s === 0); $("shapeDoor").classList.toggle("on", s === 1); }
-$("shapeBubble").onclick = () => setShape(0); $("shapeDoor").onclick = () => setShape(1);
-
-// ---------- sound: synthesised with Web Audio, off until you turn it on ----------
+// ---------- sound (Web Audio, no files; off until switched on) ----------
 let AC = null, soundOn = false;
 function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended") AC.resume(); return AC; }
-function noiseBuf(c, sec) { const b = c.createBuffer(1, c.sampleRate * sec, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
 function sfxWhoosh(dur) {
-  if (!soundOn) return; const c = ac(), t = c.currentTime, n = c.createBufferSource(); n.buffer = noiseBuf(c, dur + 0.2);
-  const f = c.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 1.4; f.frequency.setValueAtTime(240, t); f.frequency.exponentialRampToValueAtTime(3800, t + dur * 0.5); f.frequency.exponentialRampToValueAtTime(400, t + dur);
+  if (!soundOn) return; const c = ac(), t = c.currentTime, b = c.createBuffer(1, c.sampleRate * (dur + 0.2), c.sampleRate), dd = b.getChannelData(0); for (let i = 0; i < dd.length; i++) dd[i] = Math.random() * 2 - 1;
+  const n = c.createBufferSource(); n.buffer = b; const f = c.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 1.4;
+  f.frequency.setValueAtTime(240, t); f.frequency.exponentialRampToValueAtTime(3800, t + dur * 0.5); f.frequency.exponentialRampToValueAtTime(400, t + dur);
   const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + dur * 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  const o = c.createOscillator(); o.type = "sine"; o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(38, t + dur);
-  const og = c.createGain(); og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.35, t + dur * 0.5); og.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  const o = c.createOscillator(); o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(38, t + dur); const og = c.createGain(); og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.35, t + dur * 0.5); og.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   n.connect(f).connect(g).connect(c.destination); o.connect(og).connect(c.destination); n.start(t); n.stop(t + dur + 0.1); o.start(t); o.stop(t + dur + 0.1);
 }
-function sfxChime() {
-  if (!soundOn) return; const c = ac(), t = c.currentTime;
-  [523.3, 659.3, 784, 1046.5, 1318.5].forEach((fq, i) => { const o = c.createOscillator(), g = c.createGain(); o.type = "sine"; o.frequency.value = fq * (1 + (Math.random() - 0.5) * 0.004);
-    const st = t + i * 0.07; g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(0.09, st + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, st + 1.8);
-    o.connect(g).connect(c.destination); o.start(st); o.stop(st + 1.9); });
-}
+function tone(fqs, gap, len, vol) { if (!soundOn) return; const c = ac(), t = c.currentTime; fqs.forEach((fq, i) => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = fq; const st = t + i * gap;
+  g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(vol, st + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, st + len); o.connect(g).connect(c.destination); o.start(st); o.stop(st + len + 0.05); }); }
+const sfxChime = () => tone([523.3, 659.3, 784, 1046.5, 1318.5], 0.07, 1.8, 0.08), sfxBlip = () => tone([880, 1320], 0.05, 0.35, 0.06);
 $("soundBtn").onclick = () => { soundOn = !soundOn; $("soundBtn").textContent = soundOn ? "Sound on" : "Sound off"; $("soundBtn").classList.toggle("on", soundOn); $("soundBtn").setAttribute("aria-pressed", soundOn); if (soundOn) { ac(); sfxChime(); } };
 
-// ---------- going through ----------
+// ---------- you ----------
+let yaw = 0, pitch = -0.06, yawVel = 0; const pos = new THREE.Vector3(), keys = {};
+function applyCam() { camera.position.copy(pos); camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, "YXZ")); camera.updateMatrixWorld(); }
+const fwd = () => new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+function portalAt(x, y) {   // the bubble under a screen point, nearest first
+  let best = null, bd = 1e9;
+  for (const P of portals) {
+    if (P.open < 0.5 || P.expand) continue; const c = P.group.position.clone().project(camera); if (c.z > 1) continue;
+    const sx = (c.x * 0.5 + 0.5) * innerWidth, sy = (-c.y * 0.5 + 0.5) * innerHeight, dist = camera.position.distanceTo(P.group.position);
+    const rpx = (0.74 * P.open / dist) * (innerHeight / 2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const d = Math.hypot(x - sx, y - sy); if (d < rpx && dist < bd) { best = P; bd = dist; }
+  }
+  return best;
+}
+let drag = null;
+canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, P: portalAt(e.clientX, e.clientY), swiped: false }; canvas.setPointerCapture(e.pointerId); stopTour(); });
+canvas.addEventListener("pointermove", (e) => {
+  if (!drag) { canvas.classList.toggle("over", !!portalAt(e.clientX, e.clientY)); return; }
+  if (drag.P && PHONE && !drag.swiped && Math.abs(e.clientX - drag.x0) > 50 && Math.abs(e.clientX - drag.x0) > Math.abs(e.clientY - drag.y0)) { drag.swiped = true; cycle(drag.P, e.clientX < drag.x0 ? 1 : -1); return; }
+  if (drag.swiped || busy()) return;
+  const dx = (e.clientX - drag.x) * 0.0042; yaw -= dx; yawVel = -dx / 0.016; pitch = Math.max(-1.3, Math.min(1.3, pitch - (e.clientY - drag.y) * 0.0042)); drag.x = e.clientX; drag.y = e.clientY;
+});
+canvas.addEventListener("pointerup", (e) => {
+  const d = drag; drag = null; if (!d || d.swiped || Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 6 || busy() || !A) return;
+  const P = portalAt(e.clientX, e.clientY);
+  if (P) return expandPortal(P);
+  // open another bubble where you clicked
+  const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
+  let hit = null; try { hit = ray.intersectObject(A.mesh, false).find((h) => h.distance > 0.9 && h.distance < 10); } catch {}
+  const at = hit ? hit.point.clone().lerp(camera.position, Math.min(0.5, 0.45 / hit.distance)) : ray.ray.at(2.6, new THREE.Vector3());
+  at.y = Math.min(Math.max(at.y, pos.y - 0.7), pos.y + 0.6);
+  const w = freeWorld(portals.length ? portals[portals.length - 1].w : here); if (w === null) return;
+  if (portals.length >= MAXP) removePortal(portals[0]);
+  makePortal(w, at);
+});
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault(); const P = portalAt(e.clientX, e.clientY);
+  if (P) { if (performance.now() - (P.lastWheel || 0) > 380) { P.lastWheel = performance.now(); cycle(P, e.deltaY > 0 ? 1 : -1); } return; }
+  if (!busy()) pos.addScaledVector(fwd(), -e.deltaY * 0.0025);
+}, { passive: false });
+addEventListener("keydown", (e) => { keys[e.code] = true; if (e.code === "Space") { e.preventDefault(); const P = nearest(); if (P) expandPortal(P); } });
+addEventListener("keyup", (e) => (keys[e.code] = false));
+const nearest = () => portals.filter((p) => p.B && p.open > 0.5).sort((a, b) => a.group.position.distanceTo(camera.position) - b.group.position.distanceTo(camera.position))[0];
+
+// ---------- dock: the worlds, applied to the bubble nearest the middle of the view ----------
+for (const [i, W] of WORLDS.entries()) { const b = document.createElement("button"); b.textContent = W.name; b.dataset.i = i; b.onclick = () => { const P = focusPortal(); if (P && i !== here && !used().has(i)) setWorld(P, i); }; $("worlds").append(b); }
+function focusPortal() { let best = null, bs = -2; for (const P of portals) { const v = P.group.position.clone().sub(camera.position).normalize(), s = v.dot(new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)); if (s > bs) { bs = s; best = P; } } return best; }
+function updateDock() { $("here").textContent = WORLDS[here].name; const F = focusPortal(); for (const b of $("worlds").children) { const i = +b.dataset.i; b.classList.toggle("here", i === here); b.classList.toggle("next", !!F && i === F.w); } }
+
+// ---------- stepping in: the bubble grows until it fills the view, then that world is yours ----------
+let A = null, here = 0, arrive = null, flash = 0, blur = 0; const blurC = new THREE.Vector2(0.5, 0.5);
+const busy = () => portals.some((p) => p.expand);
+function expandPortal(P) {
+  if (!P.B || P.expand || busy()) return;
+  P.expand = { t0: performance.now(), dur: REDUCED ? 500 : 1250, from: P.open, pos0: pos.clone() }; sfxWhoosh(REDUCED ? 0.5 : 1.25);
+}
+function enter(P) {
+  // carry your pose across the portal so the picture does not jump: what you saw through it is now around you
+  pos.copy(pos.clone().applyMatrix4(P.PAinv)); yaw -= P.yaw;
+  if (A) { A.U.burst.value = 0; A.U.glowR.value = 0; A.mesh.updateVersion(); }
+  A = P.B; setClip(A, false); here = P.w;
+  for (const Q2 of [...portals]) removePortal(Q2);
+  A.U.bp.value.copy(toLocal(A, pos)); arrive = REDUCED ? null : { t0: performance.now() };
+  flash = 1; title(WORLDS[here].name, "you stepped in"); updateDock();
+  setTimeout(() => { const w = freeWorld(here); if (w !== null && !portals.length) makePortal(w, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.5, -0.2, 0))); }, REDUCED ? 300 : 1500);
+  evict();
+}
 function title(t, s) { $("titleT").textContent = t; $("titleS").textContent = s; $("title").classList.add("on"); setTimeout(() => $("title").classList.remove("on"), 1800); }
-function startJump() {
-  if (jump || !B || open < 0.95) return;
-  const l = localOf(pos);
-  jump = { t0: performance.now(), dur: REDUCED ? 600 : 1500, from: l, yaw0: yaw - portal.rotation.y, pitch0: pitch, swapped: false }; sfxWhoosh(REDUCED ? 0.6 : 1.5);
-}
-function swapWorlds() {
-  // what you see through the portal becomes the world you stand in: carry your pose across the portal
-  const l = localOf(pos); pos.copy(l); yaw -= portal.rotation.y;
-  if (A) { const old = A; old.U.burst.value = 0; setGlow(old, null, 0); old.mesh.updateVersion(); }
-  A = B; B = null; setClip(A, false); here = next;
-  A.U.bp.value.copy(pos.clone().applyMatrix4(A.mesh.matrixWorld.clone().invert())); arrive = REDUCED ? null : { t0: performance.now() };
-  portal.position.set(0, 0, 0); base.set(0, 0, 0); portal.rotation.set(0, 0, 0); portal.updateMatrixWorld(true); PA.identity(); PAinv.identity();
-  open = 0; flash = 1; title(WORLDS[here].name, "you went through");
-  next = (here + 1) % WORLDS.length; updateDock();
-  setTimeout(async () => {   // a new portal forms ahead of you
-    placePortal(); portalMat.uniforms.uLoading.value = 1;
-    const target = next, w = await loadWorld(target); if (next !== target) return;
-    B = w; setClip(B, true); portalMat.uniforms.uLoading.value = 0; opening = { t0: performance.now(), from: 0 }; sfxChime();
-    loadWorld((target + 1) % WORLDS.length);   // fetch the one after in the background
-  }, REDUCED ? 300 : 1700);
-}
-const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 
 // ---------- auto tour ----------
 let tour = 0;
 function stopTour() { if (tour) { clearInterval(tour); tour = 0; $("tourBtn").classList.remove("on"); } }
-$("tourBtn").onclick = () => { if (tour) return stopTour(); $("tourBtn").classList.add("on"); startJump(); tour = setInterval(() => { setShape(Math.random() < 0.5 ? 0 : 1); startJump(); }, 9000); };
-$("jumpBtn").onclick = () => { stopTour(); startJump(); };
+$("tourBtn").onclick = () => {
+  if (tour) return stopTour(); $("tourBtn").classList.add("on"); let n = 0;
+  tour = setInterval(() => { const P = nearest(); if (!P) return; n++; if (n % 3) cycle(P, 1); else { setShape(n % 9 === 0 ? 2 : n % 6 === 0 ? 1 : 0); expandPortal(P); } }, 2600);
+};
 
 // ---------- start ----------
-setShape(Q.get("shape") === "door" ? 1 : 0); applyCam(); updateDock();
-A = await loadWorld(0, (f) => ($("loadBar").style.width = `${Math.round(70 * f)}%`));
-$("loadMsg").textContent = "Opening a portal";
-placePortal();
-B = await loadWorld(1, (f) => ($("loadBar").style.width = `${70 + Math.round(30 * f)}%`)); setClip(B, true);
-$("load").classList.add("done"); opening = { t0: performance.now() + 500, from: 0 };
-loadWorld(2); setTimeout(() => ($("hint").style.opacity = 0), 9000);
-if (Q.has("tour")) $("tourBtn").click();
-if (DEBUG) window.__p = { get A() { return A; }, get B() { return B; }, startJump, chooseNext, setShape, camera, portal, get pos() { return pos; }, set yaw(v) { yaw = v; }, get yaw() { return yaw; } };
+applyCam();
+const only = Q.has("only") ? +Q.get("only") : null;
+A = await loadWorld(only ?? 0, (f) => ($("loadBar").style.width = `${Math.round(100 * f)}%`)); here = only ?? 0;
+if (Q.has("yaw")) yaw = +Q.get("yaw");
+$("load").classList.add("done"); updateDock();
+if (only === null) setTimeout(() => makePortal(1, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.45, -0.2, 0))), 500);
+setTimeout(() => ($("hint").style.opacity = 0), 10000);
+if (Q.has("tour")) setTimeout(() => $("tourBtn").click(), 2500);
+if (DEBUG) window.__p = { get A() { return A; }, portals, makePortal, expandPortal, cycle, setShape, camera, get pos() { return pos; }, set yaw(v) { yaw = v; }, get yaw() { return yaw; }, set pitch(v) { pitch = v; } };
 
 // ---------- frame ----------
-let last = performance.now();
-const _f = new THREE.Vector3(), _r = new THREE.Vector3(), prevL = new THREE.Vector3();
+let last = performance.now(), dockT = 0;
+const _r = new THREE.Vector3();
 renderer.setAnimationLoop((now) => {
   const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = now / 1000;
-  // walking
-  if (!jump) {
-    _f.set(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw); _r.set(-_f.z, 0, _f.x);
-    const sp = (keys.ShiftLeft ? 3 : 1.4) * dt;
-    if (keys.KeyW || keys.ArrowUp) pos.addScaledVector(_f, sp); if (keys.KeyS || keys.ArrowDown) pos.addScaledVector(_f, -sp);
+  if (!busy()) {
+    const f0 = fwd(); _r.set(-f0.z, 0, f0.x); const sp = (keys.ShiftLeft ? 3 : 1.4) * dt;
+    if (keys.KeyW || keys.ArrowUp) pos.addScaledVector(f0, sp); if (keys.KeyS || keys.ArrowDown) pos.addScaledVector(f0, -sp);
     if (keys.KeyA || keys.ArrowLeft) pos.addScaledVector(_r, -sp); if (keys.KeyD || keys.ArrowRight) pos.addScaledVector(_r, sp);
     if (keys.KeyQ) pos.y -= sp; if (keys.KeyE) pos.y += sp;
   }
-  // the jump: a fly through the portal centre, with a widening lens and blur that peak as you cross
-  let blur = 0, fov = 70;
-  if (jump) {
-    const k = Math.min(1, (now - jump.t0) / jump.dur), e = ease(k);
-    const target = new THREE.Vector3(0, 0, -1.6), l = jump.from.clone().lerp(target, e);
-    if (!jump.swapped) { pos.copy(l).applyMatrix4(PA); yaw = portal.rotation.y + jump.yaw0 * (1 - e); }
-    else { pos.copy(l); yaw = jump.yaw0 * (1 - e); }
-    pitch = jump.pitch0 * (1 - e);
-    blur = Math.sin(Math.PI * k) * (REDUCED ? 0.15 : 0.55); fov = 70 + Math.sin(Math.PI * k) * 26;
-    if (A && !jump.swapped) { A.U.burst.value = Math.max(0, (k - 0.25) / 0.3) * 0.6; A.mesh.updateVersion(); }
-    if (k >= 1) jump = null;
+  yawVel *= Math.exp(-dt * 6);
+  let fov = 70; blur = 0;
+  const f = fwd(), right = new THREE.Vector3(-f.z, 0, f.x);
+  // bubbles: soft spring physics; they drift back into view when you turn away and sway when you look around
+  for (const [k, P] of [...portals].entries()) {
+    if (!portals.includes(P)) continue;
+    if (!P.expand) {
+      const toA = P.anchor.clone().sub(pos), dist = toA.length(), ang = Math.acos(THREE.MathUtils.clamp(toA.clone().setY(0).normalize().dot(f), -1, 1));
+      if (ang > 0.75 || dist > 7 || dist < 1.1) {
+        const slot = (k - (portals.length - 1) / 2) * 1.6;
+        P.anchor.lerp(pos.clone().addScaledVector(f, 2.6).addScaledVector(right, slot + 0.4).add(new THREE.Vector3(0, -0.2, 0)), 1 - Math.exp(-dt * 1.4));
+      }
+      const target = P.anchor.clone().add(new THREE.Vector3(Math.sin(t * 0.5 + P.seed) * 0.09, Math.sin(t * 0.9 + P.seed * 2) * 0.06, Math.cos(t * 0.4 + P.seed) * 0.09));
+      P.vel.addScaledVector(target.clone().sub(P.pos), 9 * dt).multiplyScalar(Math.exp(-dt * 4.5));
+      P.vel.addScaledVector(right, -yawVel * 0.004);
+      P.pos.addScaledVector(P.vel, dt);
+      if (P.pos.clone().sub(pos).setY(0).length() > 1.2) P.yaw = Math.atan2(pos.x - P.pos.x, pos.z - P.pos.z);   // always turned towards you
+      const sq = Math.min(0.12, P.vel.length() * 0.08);   // jelly wobble on the surface only (the world mapping stays rigid)
+      P.surface.scale.set(1 + 0.03 * Math.sin(t * 2.3 + P.seed) + sq, 1 + 0.03 * Math.sin(t * 2.3 + P.seed + 3.1) - sq * 0.6, 1); P.sparks.scale.copy(P.surface.scale);
+    }
+    P.group.position.copy(P.pos); P.group.rotation.set(0, P.yaw, 0); P.group.updateMatrixWorld(true);
+    P.PA.copy(P.group.matrixWorld); P.PAinv.copy(P.PA).invert();
+    if (P.opening) { const k2 = Math.min(1, Math.max(0, (now - P.opening.t0) / 1100)); P.open = P.opening.from + (1 - P.opening.from) * (1 - Math.pow(2, -10 * k2) * Math.cos(k2 * 9.4)); if (k2 >= 1) { P.open = 1; P.opening = null; } }
+    if (P.expand) {
+      const k2 = Math.min(1, (now - P.expand.t0) / P.expand.dur), e = ease(k2);
+      P.open = P.expand.from + e * 9; pos.copy(P.expand.pos0).lerp(P.pos, e * 0.35);
+      blur = Math.sin(Math.PI * Math.min(1, k2 * 1.15)) * (REDUCED ? 0.12 : 0.5); fov = 70 + Math.sin(Math.PI * k2) * 18;
+      const c = P.pos.clone().project(camera); blurC.set(THREE.MathUtils.clamp(c.x * 0.5 + 0.5, 0.2, 0.8), THREE.MathUtils.clamp(c.y * 0.5 + 0.5, 0.2, 0.8));
+      if (A) { A.U.bp.value.copy(toLocal(A, P.pos)); A.U.burst.value = Math.max(0, (k2 - 0.3) / 0.4) * 0.5; A.mesh.updateVersion(); }
+      P.sparkMat.uniforms.uBoost.value = blur * 2;
+      if (k2 >= 0.88) { applyCam(); enter(P); continue; }
+    }
+    if (P.B && P.open > 0.9 && !P.expand) {   // walking into a bubble also takes you through
+      const l = camera.position.clone().applyMatrix4(P.PAinv);
+      if (P.prevZ > 0 && l.z <= 0 && Math.hypot(l.x, l.y) < 0.7) { enter(P); continue; }
+      P.prevZ = l.z;
+    }
+    P.flash = Math.max(0, P.flash - dt * 2.5);
+    P.mat.uniforms.uOpen.value = Math.max(0, P.open); P.sparkMat.uniforms.uOpen.value = Math.max(0.15, Math.min(P.open, 1.3)); P.mat.uniforms.uT.value = P.sparkMat.uniforms.uT.value = t; P.mat.uniforms.uFlash.value = P.flash * 0.6;
+    P.sparkMat.uniforms.uPx.value = res.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   }
-  // crossing the portal plane inside the opening swaps worlds (walking or jumping)
-  if (B && open > 0.9) {
-    const l = localOf(pos), inside = shape === 0 ? Math.hypot(l.x, l.y) < 0.62 : Math.abs(l.x) < 0.62 && Math.abs(l.y) < 0.98;
-    if (Math.sign(prevL.z) !== Math.sign(l.z) && Math.abs(prevL.z - l.z) < 1 && inside) { if (jump) jump.swapped = true; swapWorlds(); }
-    prevL.copy(localOf(pos));
-  } else prevL.set(0, 0, 1);
   applyCam();
-  if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); camB.fov = fov; camB.updateProjectionMatrix(); }
-  // portal opening animation (a springy grow)
-  if (shape === 0 && !jump && open > 0.5) { bob = Math.sin(t * 1.3) * 0.035; portal.position.copy(base).add(new THREE.Vector3(0, bob, 0)); portal.updateMatrixWorld(true); PA.copy(portal.matrixWorld); PAinv.copy(PA).invert(); }
-  if (B) { const side = localOf(camera.position).z >= 0 ? 1 : -1; if (B.U.clipSide !== side) setClip(B, true, side); }
+  if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   if (arrive && A) { const k = Math.min(1, (now - arrive.t0) / 1900); A.U.burst.value = 0.9 * (1 - ease(k)); A.mesh.updateVersion(); if (k >= 1) { A.U.burst.value = 0; arrive = null; } }
-  if (opening) { const k = Math.min(1, Math.max(0, (now - opening.t0) / 1100)); open = opening.from + (1 - opening.from) * (1 - Math.pow(2, -10 * k) * Math.cos(k * 9.4)); if (k >= 1) { open = 1; opening = null; } }
-  portalMat.uniforms.uOpen.value = Math.max(0, open); sparkMat.uniforms.uOpen.value = Math.max(0.15, open); portalMat.uniforms.uT.value = sparkMat.uniforms.uT.value = t;
-  sparkMat.uniforms.uPx.value = innerHeight * renderer.getPixelRatio() / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
-  sparkMat.uniforms.uBoost.value = blur * 2;
+  if (A) { A.U.t.value = t; const P0 = nearest(); if (P0) { A.U.glowP.value.copy(toLocal(A, P0.pos)); A.U.glowR.value = 0.75 * Math.min(P0.open, 1); } else A.U.glowR.value = 0; if (portals.length || arrive) A.mesh.updateVersion(); }
   flash = Math.max(0, flash - dt * 2.2);
-  if (A) { A.U.t.value = t; setGlow(A, portal.position, 0.7 * open); if (open > 0 || A.U.burst.value > 0) A.mesh.updateVersion(); }
-  // render: the other world from the matching camera, then your world, then the portal, then the lens pass
-  if (B) {
-    camB.matrixWorld.multiplyMatrices(PAinv, camera.matrixWorld); camB.matrixWorld.decompose(camB.position, camB.quaternion, camB.scale); camB.updateMatrixWorld(true);
-    renderer.setRenderTarget(rtB); renderer.clear(); renderer.render(B.scene, camB);
+  for (const P of portals) { const c = P.pos.clone().add(new THREE.Vector3(0, -0.85 * Math.min(P.open, 1), 0)).project(camera), vis = c.z < 1 && P.open > 0.6 && !P.expand && Math.abs(c.x) < 1 && Math.abs(c.y) < 1;
+    P.label.style.opacity = vis ? 1 : 0; if (vis) { P.label.style.left = (c.x * 0.5 + 0.5) * innerWidth + "px"; P.label.style.top = (-c.y * 0.5 + 0.5) * innerHeight + "px"; } }
+  // render: each bubble's world from its matching camera, then yours, then the bubbles, then the lens pass
+  for (const P of portals) {
+    if (!P.B) continue;
+    P.camB.fov = camera.fov; P.camB.aspect = camera.aspect; P.camB.updateProjectionMatrix();
+    P.camB.matrixWorld.multiplyMatrices(P.PAinv, camera.matrixWorld); P.camB.matrixWorld.decompose(P.camB.position, P.camB.quaternion, P.camB.scale); P.camB.updateMatrixWorld(true);
+    renderer.setRenderTarget(P.rt); renderer.clear(); renderer.render(P.B.scene, P.camB);
   }
   renderer.setRenderTarget(rtMain); renderer.clear();
   if (A) renderer.render(A.scene, camera);
   renderer.autoClear = false; renderer.render(fx, camera); renderer.autoClear = true;
-  postMat.uniforms.uBlur.value = blur; postMat.uniforms.uFlash.value = flash * 0.55;
-  if (B) { const c = portal.position.clone().project(camera); postMat.uniforms.uC.value.set(THREE.MathUtils.clamp(c.x * 0.5 + 0.5, 0.2, 0.8), THREE.MathUtils.clamp(c.y * 0.5 + 0.5, 0.2, 0.8)); }
+  postMat.uniforms.uBlur.value = blur; postMat.uniforms.uFlash.value = flash * 0.5; postMat.uniforms.uC.value.copy(blurC);
   renderer.setRenderTarget(null); renderer.render(post, postCam);
+  if (now - dockT > 400) { dockT = now; updateDock(); }
 });
 </script>
 </body>
