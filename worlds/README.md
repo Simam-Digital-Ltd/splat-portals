@@ -1,0 +1,12 @@
+# Worlds
+
+Put your Gaussian splat files here, then list them in the `WORLDS` array in `index.html`.
+
+- **Format:** `.sog` loads as written. For `.ply` or `.spz`, change the `fileType` passed to `SplatMesh` in `loadWorld()`, or let Spark detect it from the URL.
+- **Pose:** each world should start at the origin, looking down -z. Many generated worlds already do. The loader turns every mesh 180 degrees about x, because these files are stored y-down. If yours comes in upside down, remove that line.
+- **Where to get worlds:**
+  - export from [SuperSplat](https://superspl.at) or LichtFeld Studio;
+  - generate one with a text- or image-to-world tool;
+  - capture your own with a phone or drone and train it.
+
+The splats used in the live demo are not included here.
