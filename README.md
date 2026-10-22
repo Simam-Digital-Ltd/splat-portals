@@ -30,8 +30,9 @@ npx serve .
 | Drag | Look around |
 | W A S D, Q / E | Walk, and go down and up |
 | Space | Step into the nearest bubble |
+| Quality button | Auto, or pick Light, Balanced, High or Full yourself |
 
-Add `?tour` to the URL for an automatic tour. To use your own worlds, see [worlds/README.md](worlds/README.md).
+Add `?tour` to the URL for an automatic tour, `?quality=light` (or `balanced`, `high`, `full`) to fix the quality, and `?stats` to show the frame rate. To use your own worlds, see [worlds/README.md](worlds/README.md).
 
 ## What it does beyond the original
 
@@ -44,7 +45,8 @@ Add `?tour` to the URL for an automatic tour. To use your own worlds, see [world
 - **Soap bubbles and sparkles** drift off the rim; some sparkles fall and settle on the floor.
 - **Worlds break up and form.** The world you leave scatters; the one you arrive in assembles out of a violet mist.
 - **Walk through, too.** Walking into a bubble takes you through, the same as clicking.
-- **Sound made in the browser:** a hum near bubbles, crackles as sparks hit, a wobble, chimes and a whoosh. There are no audio files.
+- **A calm soundscape made in the browser.** Each world has its own slow ambient chords and air: the sea on the beach, wind in the desert, a low, dark room in the church. The bubbles whoosh as they move, panned to where they are, and you hear crackles as sparks hit, a wobble, chimes and a rush as you step through. There are no audio files.
+- **Runs on modest devices.** It picks a starting quality from the device's graphics chip, then watches the frame rate and steps up or down by itself.
 
 ## How it works
 
@@ -103,7 +105,13 @@ The rim is a ring of 40 springs, each pulled back to rest and coupled to its nei
 
 ### 7. Sound
 
-All synthesised with Web Audio: a soft hum that grows as you get close to a bubble, crackles when sparks hit things, a wobble when the rim is poked, a chime when a bubble opens, a blip when it changes world, and a whoosh when you step in. It starts on your first click or key press, and the top bar mutes it.
+All synthesised with Web Audio, with no audio files. Everything goes through one bus with a gentle compressor and a shared reverb, made from a few seconds of decaying noise.
+
+- **Ambient bed:** five soft voices play slow major-ninth chords, changing every 13 seconds, through a slowly moving low-pass filter. Underneath is filtered pink noise that swells like waves or wind. Each world sets its own key, brightness and kind of air. Now and then a quiet bell from the current chord sounds off to one side.
+- **Movement:** a looping noise band whose loudness and pitch follow the fastest bubble's speed, plus how fast you turn and walk. It is panned to where that bubble is on screen.
+- **Events:** a hum near bubbles, crackles when sparks hit (panned), a wobble when the rim is poked, a chime when a bubble opens, a blip and a swish when it changes world, and a long rush when you step in.
+
+It starts on your first click or key press, pauses when the tab is hidden, and the top bar mutes it.
 
 ### 8. Stepping in
 
@@ -115,6 +123,28 @@ Clicking a bubble grows its shape well past the edges of the screen while you dr
 2. Your world, from your camera, into `rtMain`.
 3. The bubbles (sampling their render targets) and their particles, on top.
 4. The lens pass to the screen: motion blur, colour split, flash.
+
+## Performance
+
+Splats are expensive to fill, and every bubble draws a whole extra world each frame, so the page manages its own quality.
+
+- **Starting level:** read from the graphics chip's name (`WEBGL_debug_renderer_info`), the device memory and the core count. Software rendering starts at Light, weak mobile chips at Balanced, phones and Intel graphics at High, and everything else at Full.
+- **Four levels:**
+
+| | Light | Balanced | High | Full |
+|---|---|---|---|---|
+| Render resolution | 55% | 75% | 90% | 100% |
+| View inside a bubble | 50% | 60% | 80% | 100% |
+| Bubbles at once | 1 | 2 | 3 | 3 |
+| Spark rate | 30% | 55% | 80% | 100% |
+| Splat footprint (`maxStdDev`) | 2.0 | 2.3 | 2.6 | √8 |
+| Splat re-sort interval | 80 ms | 40 ms | 16 ms | every frame |
+
+- **Governor:** it keeps a smoothed frame time and steps down after 1.5 seconds below about 33 fps, or 0.6 seconds below 20 fps. It steps back up after 6 seconds above about 52 fps. If a level has had to be abandoned twice, it stops climbing back to it, so it never flips back and forth. Frames while a world is loading are ignored.
+- **Cheaper effects:** the lens pass takes a single sample when nothing is blurring, instead of 84, and fewer samples on lighter levels. The glow on the world around the bubbles is recomputed every 2nd or 4th frame on lighter levels. On Light, each bubble's world redraws every other frame.
+- **Graceful failure:** if WebGL 2 is missing or the graphics driver resets, the page says so in plain words instead of showing a blank screen.
+
+Measured at 1600×900 on an RTX 4070: 60 fps at every level with one bubble. With three bubbles, 48 fps at Full and 58 fps at Light.
 
 ## Notes
 

@@ -67,6 +67,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   <button class="btn on" data-shape="0">Blob</button><button class="btn" data-shape="1">Bubble</button><button class="btn" data-shape="2">Doorway</button>
   <button class="btn" id="tourBtn">Auto tour</button>
   <button class="btn on" id="soundBtn" aria-pressed="true">Sound on</button>
+  <button class="btn" id="qBtn" title="Picture quality. Auto adapts to this device.">Auto</button>
 </header>
 <div id="hint" class="glass">Scroll on a bubble to change its world · click it to step in · click anywhere to open another · drag to look, W A S D to walk</div>
 <div id="dock" class="glass"><span class="label">Nearest bubble</span><div id="worlds"></div></div>
@@ -82,7 +83,7 @@ const BASE = location.pathname.includes("/demos/") ? "/demos/portals/" : "./";
 const Q = new URLSearchParams(location.search), DEBUG = Q.has("debug");
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const PHONE = matchMedia("(pointer: coarse)").matches;
-const MAXP = PHONE ? 2 : 3;   // bubbles at once (each one draws a whole extra world every frame)
+let MAXP = PHONE ? 2 : 3;   // bubbles at once (each one draws a whole extra world every frame); quality may lower it
 const $ = (id) => document.getElementById(id);
 const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 
@@ -100,8 +101,38 @@ if (Q.has("flips")) Q.get("flips").split("").forEach((c, i) => WORLDS[i] && (WOR
 
 // ---------- renderer ----------
 const canvas = $("gl");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: DEBUG });
-renderer.setPixelRatio(Math.min(devicePixelRatio, PHONE ? 1.4 : 1.75));
+function noGL(msg) { $("load").classList.remove("done"); $("load").querySelector("b").textContent = "This browser can't draw the 3D worlds"; $("loadMsg").textContent = msg; $("loadBar").parentElement.style.display = "none"; }
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: DEBUG }); }
+catch (e) { noGL("It needs WebGL 2, which is off or missing here. Try a recent Chrome, Edge, Firefox or Safari with hardware acceleration switched on."); throw e; }
+canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); noGL("The graphics driver was reset. Reload the page to carry on."); });
+
+// ---------- quality: a starting level from the device, then it adapts to the frame rate ----------
+// scale: render resolution. ps: resolution of the view inside a bubble. pr: pixel-ratio cap. np: spark rate.
+// std / px: how far each splat spreads (smaller is cheaper to fill). sortMs: how often splats re-sort. mod: re-run the world effect every n frames.
+const STEPS = [
+  { name: "Light", scale: 0.55, ps: 0.5, pr: 1, maxp: 1, np: 0.3, std: 2.0, px: 96, sortMs: 80, blurN: 8, mod: 4, spare: 0, skip: true },
+  { name: "Balanced", scale: 0.75, ps: 0.6, pr: 1.25, maxp: 2, np: 0.55, std: 2.3, px: 200, sortMs: 40, blurN: 14, mod: 2, spare: 0, skip: false },
+  { name: "High", scale: 0.9, ps: 0.8, pr: 1.5, maxp: 3, np: 0.8, std: 2.6, px: 360, sortMs: 16, blurN: 20, mod: 1, spare: 1, skip: false },
+  { name: "Full", scale: 1, ps: 1, pr: 1.75, maxp: 3, np: 1, std: Math.sqrt(8), px: 512, sortMs: 0, blurN: 28, mod: 1, spare: 1, skip: false },
+];
+const gl0 = renderer.getContext(), dbgInfo = gl0.getExtension("WEBGL_debug_renderer_info");
+const GPU = dbgInfo ? String(gl0.getParameter(dbgInfo.UNMASKED_RENDERER_WEBGL)) : "";
+const SOFT = /swiftshader|llvmpipe|softpipe|basic render|software/i.test(GPU);   // no graphics card in use at all
+const WEAK = /mali-[2-7]\d\d|mali-g[1-5]\d\b|adreno[^0-9]*[3-5]\d\d|powervr|gma /i.test(GPU) || (navigator.deviceMemory ?? 8) <= 4 || (navigator.hardwareConcurrency ?? 8) <= 4;
+const QP = { light: 0, balanced: 1, high: 2, full: 3 }[Q.get("quality")];
+const startStep = SOFT ? 0 : WEAK ? 1 : PHONE || /intel/i.test(GPU) ? 2 : 3, qTop = PHONE ? 2 : 3;
+let qAuto = QP === undefined, step = QP ?? startStep, QL = STEPS[step], lastUp = -1, quietUntil = 0;
+const upFails = [0, 0, 0, 0];
+function tuneSpark(w) { w.spark.maxStdDev = QL.std; w.spark.maxPixelRadius = QL.px; w.spark.minSortIntervalMs = QL.sortMs; }
+function applyQuality() {
+  QL = STEPS[step]; MAXP = Math.min(QL.maxp, PHONE ? 2 : 3);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, QL.pr, PHONE ? 1.4 : 1.75)); resize();
+  for (const pr of cache.values()) pr.then(tuneSpark, () => {});
+  sparkGeo.setDrawRange(0, Math.max(8, Math.round(NS * QL.np))); postMat.uniforms.uN.value = QL.blurN;
+  while (portals.length > MAXP) { const old = portals.find((p) => !p.expand); if (!old) break; removePortal(old); }
+  $("qBtn").textContent = (qAuto ? "Auto: " : "") + QL.name; evict();
+}
 const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 2000);
 const rtMain = new THREE.WebGLRenderTarget(1, 1);
 const res = new THREE.Vector2(1, 1);
@@ -144,8 +175,8 @@ function loadWorld(i, onProg) {
       return { gsplat: d.apply({ gsplat, clip: U.clip, burst: U.burst, bp: U.bp, gp: U.glowP, gr: U.glowR, t: U.t }).gsplat };
     });
     mesh.updateGenerator(); scene.add(mesh); scene.updateMatrixWorld(true);
-    const rec = { i, scene, spark, mesh, U };
-    buildGrid(rec); return rec;
+    const rec = { i, scene, spark, mesh, U }; tuneSpark(rec);
+    buildGrid(rec); quietUntil = performance.now() + 1500; return rec;
   })();
   cache.set(i, p); return p;
 }
@@ -171,7 +202,7 @@ function solid(g, x, y, z) {
 async function evict() {   // keep the GPU light: the world you are in, the bubbles' worlds, and one spare
   const keep = new Set([here, ...portals.map((p) => p.w)]);
   for (const [i, pr] of [...cache]) {
-    if (cache.size <= keep.size + 1) break;
+    if (cache.size <= keep.size + QL.spare) break;
     if (keep.has(i)) continue;
     cache.delete(i); try { const w = await pr; w.mesh.dispose?.(); w.spark.dispose?.(); } catch {}
   }
@@ -274,7 +305,7 @@ function makePortal(w, at) {
     group: new THREE.Group(), pos: at.clone(), vel: new THREE.Vector3(), anchor: at.clone(), yaw: 0,
     open: 0, opening: { t0: performance.now(), from: 0 }, expand: null, seed: Math.random() * 10, flash: 0, PA: new THREE.Matrix4(), PAinv: new THREE.Matrix4(), prevZ: 1, label: document.createElement("div"), ring: new Float32Array(40), ringV: new Float32Array(40), lastVel: new THREE.Vector3(), emitAcc: 0 };
   P.yaw = Math.atan2(pos.x - at.x, pos.z - at.z);
-  P.rt.setSize(res.x, res.y);
+  P.rt.setSize(Math.round(res.x * QL.ps), Math.round(res.y * QL.ps));
   P.mat = new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
     uniforms: { tB: { value: P.rt.texture }, uRes: { value: res }, uT: { value: 0 }, uOpen: { value: 0 }, uShape: { value: shape }, uLoading: { value: 1 }, uSeed: { value: P.seed }, uFlash: { value: 0 }, uJig: { value: 0 }, uRing: { value: new Array(40).fill(0) } },
     vertexShader: `varying vec2 vP; void main() { vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: PORTAL_FS });
@@ -298,7 +329,7 @@ async function setWorld(P, w) {
 function label(P) { P.label.innerHTML = `${WORLDS[P.w].name}<small>${PHONE ? "swipe to change · tap to enter" : "scroll to change · click to enter"}</small>`; }
 const used = () => new Set([here, ...portals.map((p) => p.w)]);
 function freeWorld(from, dir = 1) { const u = used(); for (let k = 1; k <= WORLDS.length; k++) { const i = (((from + dir * k) % WORLDS.length) + WORLDS.length) % WORLDS.length; if (!u.has(i)) return i; } return null; }
-function cycle(P, dir) { const u = used(); u.delete(P.w); for (let k = 1; k <= WORLDS.length; k++) { const i = (((P.w + dir * k) % WORLDS.length) + WORLDS.length) % WORLDS.length; if (!u.has(i)) { setWorld(P, i); sfxBlip(); return; } } }
+function cycle(P, dir) { const u = used(); u.delete(P.w); for (let k = 1; k <= WORLDS.length; k++) { const i = (((P.w + dir * k) % WORLDS.length) + WORLDS.length) % WORLDS.length; if (!u.has(i)) { setWorld(P, i); sfxBlip(); sfxSwish(Math.max(-0.8, Math.min(0.8, P.pos.clone().project(camera).x))); return; } } }
 function setShape(s) { shape = s; for (const P of portals) { P.mat.uniforms.uShape.value = s; P.sparkMat.uniforms.uShape.value = s; } for (const b of document.querySelectorAll("[data-shape]")) b.classList.toggle("on", +b.dataset.shape === s); }
 for (const b of document.querySelectorAll("[data-shape]")) b.onclick = () => setShape(+b.dataset.shape);
 
@@ -384,13 +415,15 @@ function stepRing(P, dt) {
 
 // ---------- final pass: radial motion blur, chromatic split, flash ----------
 const postMat = new THREE.ShaderMaterial({
-  uniforms: { tMain: { value: rtMain.texture }, uBlur: { value: 0 }, uFlash: { value: 0 }, uC: { value: new THREE.Vector2(0.5, 0.5) } },
+  uniforms: { tMain: { value: rtMain.texture }, uBlur: { value: 0 }, uFlash: { value: 0 }, uC: { value: new THREE.Vector2(0.5, 0.5) }, uN: { value: 28 } },
   vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
   fragmentShader: `
-    uniform sampler2D tMain; uniform float uBlur, uFlash; uniform vec2 uC; varying vec2 vUv;
+    uniform sampler2D tMain; uniform float uBlur, uFlash, uN; uniform vec2 uC; varying vec2 vUv;
     void main() {
-      vec2 dir = vUv - uC; vec3 acc = vec3(0.0); float w = 0.0;
-      for (int i = 0; i < 28; i++) { float k = float(i) / 27.0, s = 1.0 - uBlur * k, wt = 1.0 - k * 0.6;
+      vec2 dir = vUv - uC;
+      if (uBlur < 0.003) { vec3 c0 = texture2D(tMain, vUv).rgb * mix(1.0, smoothstep(1.15, 0.35, length(dir)), 0.35); gl_FragColor = vec4(c0 + vec3(1.0, 0.82, 1.0) * uFlash, 1.0); return; }
+      vec3 acc = vec3(0.0); float w = 0.0;
+      for (int i = 0; i < 28; i++) { if (float(i) >= uN) break; float k = float(i) / (uN - 1.0), s = 1.0 - uBlur * k, wt = 1.0 - k * 0.6;
         acc.r += texture2D(tMain, uC + dir * (s - uBlur * 0.06)).r * wt; acc.g += texture2D(tMain, uC + dir * s).g * wt; acc.b += texture2D(tMain, uC + dir * (s + uBlur * 0.06)).b * wt; w += wt; }
       vec3 col = acc / w; float v = smoothstep(1.15, 0.35, length(dir) * (1.0 + uBlur * 1.2)); col *= mix(1.0, v, 0.35 + uBlur * 0.6);
       gl_FragColor = vec4(col + vec3(1.0, 0.82, 1.0) * uFlash, 1.0);
@@ -399,48 +432,133 @@ const postMat = new THREE.ShaderMaterial({
 const post = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 post.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat));
 function resize() {
-  const w = innerWidth, h = innerHeight, pr = renderer.getPixelRatio();
+  const w = innerWidth, h = innerHeight, pr = renderer.getPixelRatio() * QL.scale;
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
-  res.set(Math.round(w * pr), Math.round(h * pr)); rtMain.setSize(res.x, res.y); for (const P of portals) P.rt.setSize(res.x, res.y);
+  res.set(Math.round(w * pr), Math.round(h * pr)); rtMain.setSize(res.x, res.y); for (const P of portals) P.rt.setSize(Math.round(res.x * QL.ps), Math.round(res.y * QL.ps));
 }
 addEventListener("resize", resize); resize();
 
-// ---------- sound (Web Audio, no files; off until switched on) ----------
-let AC = null, soundOn = true, hum = null, lastCrackle = 0, lastWobble = 0;
-function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended") AC.resume(); return AC; }
-function sfxWhoosh(dur) {
-  if (!soundOn) return; const c = ac(), t = c.currentTime, b = c.createBuffer(1, c.sampleRate * (dur + 0.2), c.sampleRate), dd = b.getChannelData(0); for (let i = 0; i < dd.length; i++) dd[i] = Math.random() * 2 - 1;
+// ---------- sound (Web Audio, no files): a calm bed for each world, whooshes that follow the bubbles, and small effects ----------
+let AC = null, soundOn = true, bus = null, verb = null, hum = null, amb = null, swoosh = null, WN = null, lastCrackle = 0, lastWobble = 0;
+function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended" && soundOn) AC.resume(); return AC; }
+function noiseBuf(c, sec, pink) {   // white noise, or a rough pink (softer, like air or the sea)
+  const b = c.createBuffer(1, Math.ceil(c.sampleRate * sec), c.sampleRate), d = b.getChannelData(0); let b0 = 0, b1 = 0, b2 = 0;
+  for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (!pink) { d[i] = w; continue; } b0 = 0.997 * b0 + 0.029591 * w; b1 = 0.985 * b1 + 0.032534 * w; b2 = 0.95 * b2 + 0.048056 * w; d[i] = (b0 + b1 + b2 + w * 0.05) * 2.2; }
+  return b;
+}
+const white = () => WN || (WN = noiseBuf(AC, 2, false));
+function out() {   // one bus for everything: a gentle compressor, plus a shared reverb send
+  const c = ac(); if (bus) return bus;
+  const comp = c.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 3; comp.connect(c.destination);
+  bus = c.createGain(); bus.gain.value = soundOn ? 1 : 0; bus.connect(comp);
+  const ir = c.createBuffer(2, c.sampleRate * 3.2, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3.2); }
+  const cv = c.createConvolver(); cv.buffer = ir; verb = c.createGain(); verb.gain.value = 0.5; verb.connect(cv).connect(bus);
+  return bus;
+}
+function send(node, wet) { const g = AC.createGain(); g.gain.value = wet; node.connect(g).connect(verb); node.connect(bus); }
+function panned(node, pan, wet) { const p = AC.createStereoPanner ? AC.createStereoPanner() : null; if (!p) return send(node, wet); p.pan.value = pan; node.connect(p); send(p, wet); return p; }
+
+// each world has its own key and air: the sea swelling on the beach, wind in the desert, a low, dark room in the church
+const MOODS = {
+  bedroom: { root: 146.83, air: "room", wave: 0.04, bright: 900 },
+  pavilion: { root: 164.81, air: "sea", wave: 0.11, bright: 1100 },
+  gallery: { root: 130.81, air: "room", wave: 0.05, bright: 1000 },
+  tombs: { root: 110, air: "wind", wave: 0.07, bright: 800 },
+  church: { root: 98, air: "room", wave: 0.03, bright: 650 },
+  pyramids: { root: 116.54, air: "wind", wave: 0.08, bright: 850 },
+  "rock-tomb": { root: 103.83, air: "wind", wave: 0.05, bright: 700 },
+};
+const PROG = [[0, 7, 11, 14, 19], [-3, 4, 7, 11, 16], [-7, 0, 4, 9, 14], [-5, 2, 7, 9, 14]];   // Imaj9, vi9, IVmaj9, Vsus: slow, never quite resolving
+function startAmbient() {
+  const c = AC, t = c.currentTime;
+  const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 900; lp.Q.value = 0.4;
+  const pad = c.createGain(); pad.gain.value = 0; pad.gain.setTargetAtTime(0.05, t, 3); lp.connect(pad); send(pad, 0.7);   // fades in over a few seconds
+  const lfo = c.createOscillator(), lfoG = c.createGain(); lfo.frequency.value = 0.045; lfoG.gain.value = 260; lfo.connect(lfoG).connect(lp.frequency); lfo.start();
+  const voices = PROG[0].map(() => { const o1 = c.createOscillator(), o2 = c.createOscillator(), g = c.createGain(); o2.type = "triangle"; o2.detune.value = 6; g.gain.value = 0;
+    o1.connect(g); o2.connect(g); g.connect(lp); o1.start(); o2.start(); return { o1, o2, g }; });
+  const n = c.createBufferSource(); n.buffer = noiseBuf(c, 6, true); n.loop = true;   // air: soft noise that swells like waves or wind
+  const nf = c.createBiquadFilter(); nf.type = "lowpass"; nf.frequency.value = 500; const ng = c.createGain(); ng.gain.value = 0;
+  const sw = c.createOscillator(), swG = c.createGain(); sw.frequency.value = 0.09; swG.gain.value = 0; sw.connect(swG).connect(ng.gain); sw.start();
+  n.connect(nf).connect(ng); send(ng, 0.4); n.start();
+  amb = { lp, voices, nf, ng, sw, swG, chord: 0, mood: MOODS.bedroom };
+  setMood(WORLDS[here].id);
+  setInterval(() => { if (amb && soundOn && !document.hidden) { amb.chord++; setChord(); } }, 13000);
+  twinkle();
+}
+function setChord() {
+  const t = AC.currentTime, r = amb.mood.root, ch = PROG[amb.chord % PROG.length];
+  amb.voices.forEach((v, i) => { const f = r * Math.pow(2, ch[i] / 12); v.o1.frequency.setTargetAtTime(f, t, 2.5); v.o2.frequency.setTargetAtTime(f * 2, t, 2.5); v.g.gain.setTargetAtTime(i > 2 ? 0.1 : 0.18, t, 2); });
+}
+function setMood(id) {
+  if (!amb) return; const m = MOODS[id] || MOODS.bedroom, t = AC.currentTime; amb.mood = m;
+  amb.lp.frequency.setTargetAtTime(m.bright, t, 2);
+  amb.nf.type = m.air === "wind" ? "bandpass" : "lowpass"; amb.nf.frequency.setTargetAtTime(m.air === "sea" ? 700 : m.air === "wind" ? 1300 : 380, t, 2);
+  amb.ng.gain.setTargetAtTime(m.wave * 0.9, t, 2.5); amb.swG.gain.setTargetAtTime(m.wave * 0.8, t, 2.5); amb.sw.frequency.setTargetAtTime(m.air === "sea" ? 0.1 : 0.05, t, 1);
+  if (hum) { hum.o1.frequency.setTargetAtTime(m.root, t, 2); hum.o2.frequency.setTargetAtTime(m.root * 1.5, t, 2); }
+  setChord();
+}
+function twinkle() {   // now and then, one soft bell from the current chord, somewhere to the side
+  setTimeout(twinkle, 4000 + Math.random() * 5000);
+  if (!amb || !soundOn || document.hidden) return; const c = AC, t = c.currentTime, ch = PROG[amb.chord % PROG.length];
+  const o = c.createOscillator(), g = c.createGain(); o.frequency.value = amb.mood.root * 4 * Math.pow(2, ch[(Math.random() * ch.length) | 0] / 12);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.018, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+  o.connect(g); panned(g, Math.random() * 1.4 - 0.7, 0.9); o.start(t); o.stop(t + 2.7);
+}
+function startSwoosh() {   // the air the bubbles push as they move, and the rush when you turn or walk
+  const c = AC, n = c.createBufferSource(); n.buffer = white(); n.loop = true;
+  const f = c.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 0.9; f.frequency.value = 400; const g = c.createGain(); g.gain.value = 0;
+  n.connect(f).connect(g); const p = panned(g, 0, 0.25); n.start(); swoosh = { f, g, p: p && p.pan ? p : null };
+}
+function setSwoosh(amt, pan) {
+  if (!swoosh) return; const t = AC.currentTime, a = Math.min(1, amt);
+  swoosh.g.gain.setTargetAtTime(a * a * 0.16, t, 0.08); swoosh.f.frequency.setTargetAtTime(280 + a * 1700, t, 0.1);
+  if (swoosh.p) swoosh.p.pan.setTargetAtTime(Math.max(-0.9, Math.min(0.9, pan)), t, 0.1);
+}
+function sfxSwish(pan = 0) {   // a quick swish when a bubble changes world
+  if (!soundOn || !AC || !bus) return; const c = AC, t = c.currentTime, n = c.createBufferSource(); n.buffer = white();
+  const f = c.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 2; f.frequency.setValueAtTime(600, t); f.frequency.exponentialRampToValueAtTime(4200, t + 0.18); f.frequency.exponentialRampToValueAtTime(900, t + 0.42);
+  const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.14, t + 0.12); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+  n.connect(f).connect(g); panned(g, pan, 0.35); n.start(t, Math.random() * 1.4); n.stop(t + 0.5);
+}
+function sfxWhoosh(dur) {   // stepping through: a long rising rush with a low swell under it
+  if (!soundOn) return; const c = ac(); out(); const t = c.currentTime, b = c.createBuffer(1, c.sampleRate * (dur + 0.2), c.sampleRate), dd = b.getChannelData(0); for (let i = 0; i < dd.length; i++) dd[i] = Math.random() * 2 - 1;
   const n = c.createBufferSource(); n.buffer = b; const f = c.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 1.4;
   f.frequency.setValueAtTime(240, t); f.frequency.exponentialRampToValueAtTime(3800, t + dur * 0.5); f.frequency.exponentialRampToValueAtTime(400, t + dur);
   const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + dur * 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   const o = c.createOscillator(); o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(38, t + dur); const og = c.createGain(); og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.35, t + dur * 0.5); og.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  n.connect(f).connect(g).connect(c.destination); o.connect(og).connect(c.destination); n.start(t); n.stop(t + dur + 0.1); o.start(t); o.stop(t + dur + 0.1);
+  n.connect(f).connect(g); send(g, 0.45); o.connect(og).connect(bus); n.start(t); n.stop(t + dur + 0.1); o.start(t); o.stop(t + dur + 0.1);
 }
-function tone(fqs, gap, len, vol) { if (!soundOn) return; const c = ac(), t = c.currentTime; fqs.forEach((fq, i) => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = fq; const st = t + i * gap;
-  g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(vol, st + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, st + len); o.connect(g).connect(c.destination); o.start(st); o.stop(st + len + 0.05); }); }
+function tone(fqs, gap, len, vol) { if (!soundOn || !bus) return; const c = AC, t = c.currentTime; fqs.forEach((fq, i) => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = fq; const st = t + i * gap;
+  g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(vol, st + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, st + len); o.connect(g); send(g, 0.6); o.start(st); o.stop(st + len + 0.05); }); }
 function ensureAudio() {
-  if (!soundOn) return; const c = ac(); if (hum) return;
-  const g = c.createGain(); g.gain.value = 0; g.connect(c.destination);
-  const o1 = c.createOscillator(), o2 = c.createOscillator(); o1.frequency.value = 110; o2.frequency.value = 165.4; o1.type = o2.type = "sine";
-  const b = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), dd = b.getChannelData(0); for (let i = 0; i < dd.length; i++) dd[i] = Math.random() * 2 - 1;
-  const n = c.createBufferSource(); n.buffer = b; n.loop = true; const f = c.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 2400; f.Q.value = 3;
+  if (!soundOn) return; const c = ac(); out(); if (hum) return;
+  const g = c.createGain(); g.gain.value = 0; g.connect(bus);   // the hum and fizz of a nearby bubble
+  const o1 = c.createOscillator(), o2 = c.createOscillator(); o1.frequency.value = 110; o2.frequency.value = 165; o1.type = o2.type = "sine";
+  const n = c.createBufferSource(); n.buffer = noiseBuf(c, 2, false); n.loop = true; const f = c.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 2400; f.Q.value = 3;
   const ng = c.createGain(); ng.gain.value = 0.35; const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = 0.35; lg.gain.value = 600; lfo.connect(lg).connect(f.frequency);
-  o1.connect(g); o2.connect(g); n.connect(f).connect(ng).connect(g); o1.start(); o2.start(); n.start(); lfo.start(); hum = g;
+  o1.connect(g); o2.connect(g); n.connect(f).connect(ng).connect(g); o1.start(); o2.start(); n.start(); lfo.start(); hum = Object.assign(g, { o1, o2 });
+  startAmbient(); startSwoosh();
 }
 function setHum(level) { if (hum && AC) hum.gain.setTargetAtTime(soundOn ? level : 0, AC.currentTime, 0.25); }
 function sfxCrackle(k) {
-  if (!soundOn || !AC || performance.now() - lastCrackle < 45) return; lastCrackle = performance.now(); const c = AC, t = c.currentTime, len = 0.02 + Math.random() * 0.03;
+  if (!soundOn || !bus || performance.now() - lastCrackle < 45) return; lastCrackle = performance.now(); const c = AC, t = c.currentTime, len = 0.02 + Math.random() * 0.03;
   const b = c.createBuffer(1, Math.ceil(c.sampleRate * len), c.sampleRate), dd = b.getChannelData(0); for (let i = 0; i < dd.length; i++) dd[i] = (Math.random() * 2 - 1) * (1 - i / dd.length);
   const n = c.createBufferSource(); n.buffer = b; n.playbackRate.value = 0.7 + Math.random() * 1.2; const f = c.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 2500 + Math.random() * 3000;
-  const g = c.createGain(); g.gain.value = 0.02 + 0.06 * k; n.connect(f).connect(g).connect(c.destination); n.start(t);
+  const g = c.createGain(); g.gain.value = 0.02 + 0.06 * k; n.connect(f).connect(g); panned(g, Math.random() * 1.2 - 0.6, 0.2); n.start(t);
 }
 function sfxWobble(k) {
-  if (!soundOn || !AC || k < 0.15 || performance.now() - lastWobble < 260) return; lastWobble = performance.now(); const c = AC, t = c.currentTime;
+  if (!soundOn || !bus || k < 0.15 || performance.now() - lastWobble < 260) return; lastWobble = performance.now(); const c = AC, t = c.currentTime;
   const o = c.createOscillator(), g = c.createGain(); o.type = "sine"; o.frequency.setValueAtTime(240, t); o.frequency.exponentialRampToValueAtTime(520, t + 0.09); o.frequency.exponentialRampToValueAtTime(300, t + 0.22);
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05 * k, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26); o.connect(g).connect(c.destination); o.start(t); o.stop(t + 0.3);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05 * k, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26); o.connect(g); send(g, 0.3); o.start(t); o.stop(t + 0.3);
 }
-const sfxChime = () => tone([523.3, 659.3, 784, 1046.5, 1318.5], 0.07, 1.8, 0.08), sfxBlip = () => tone([880, 1320], 0.05, 0.35, 0.06);
-$("soundBtn").onclick = () => { soundOn = !soundOn; $("soundBtn").textContent = soundOn ? "Sound on" : "Sound off"; $("soundBtn").classList.toggle("on", soundOn); $("soundBtn").setAttribute("aria-pressed", soundOn); if (soundOn) { ensureAudio(); sfxChime(); } else setHum(0); };
+const sfxChime = () => tone([523.3, 659.3, 784, 1046.5, 1318.5], 0.07, 1.8, 0.07), sfxBlip = () => tone([880, 1320], 0.05, 0.35, 0.05);
+$("soundBtn").onclick = () => {
+  soundOn = !soundOn; $("soundBtn").textContent = soundOn ? "Sound on" : "Sound off"; $("soundBtn").classList.toggle("on", soundOn); $("soundBtn").setAttribute("aria-pressed", soundOn);
+  if (soundOn) { ensureAudio(); bus.gain.setTargetAtTime(1, AC.currentTime, 0.2); sfxChime(); }
+  else if (AC && bus) { bus.gain.setTargetAtTime(0, AC.currentTime, 0.15); setTimeout(() => !soundOn && AC.suspend(), 600); }
+};
+document.addEventListener("visibilitychange", () => { if (!AC) return; if (document.hidden) AC.suspend(); else if (soundOn) AC.resume(); });
 
 // ---------- you ----------
 let yaw = 0, pitch = -0.06, yawVel = 0; const pos = new THREE.Vector3(), keys = {};
@@ -510,7 +628,7 @@ function enter(P) {
   // carry your pose across the portal so the picture does not jump: what you saw through it is now around you
   pos.copy(pos.clone().applyMatrix4(P.PAinv)); yaw -= P.yaw;
   if (A) { A.U.burst.value = 0; A.U.glowR.value = 0; A.mesh.updateVersion(); }
-  A = P.B; setClip(A, false); here = P.w; clearSparks();
+  A = P.B; setClip(A, false); here = P.w; clearSparks(); setMood(WORLDS[here].id);
   for (const Q2 of [...portals]) removePortal(Q2);
   A.U.bp.value.copy(toLocal(A, pos)); arrive = REDUCED ? null : { t0: performance.now() };
   flash = 1; title(WORLDS[here].name, "you stepped in"); updateDock();
@@ -528,7 +646,7 @@ $("tourBtn").onclick = () => {
 };
 
 // ---------- start ----------
-applyCam();
+applyQuality(); applyCam();
 const only = Q.has("only") ? +Q.get("only") : null;
 A = await loadWorld(only ?? 0, (f) => ($("loadBar").style.width = `${Math.round(100 * f)}%`)); here = only ?? 0;
 if (Q.has("yaw")) yaw = +Q.get("yaw");
@@ -536,13 +654,31 @@ $("load").classList.add("done"); updateDock();
 if (only === null) setTimeout(() => makePortal(1, pos.clone().addScaledVector(fwd(), 2.6).add(new THREE.Vector3(0.45, -0.2, 0))), 500);
 setTimeout(() => ($("hint").style.opacity = 0), 10000);
 if (Q.has("tour")) setTimeout(() => $("tourBtn").click(), 2500);
-if (DEBUG) window.__p = { get A() { return A; }, portals, makePortal, expandPortal, cycle, setShape, camera, get pos() { return pos; }, set yaw(v) { yaw = v; }, get yaw() { return yaw; }, set pitch(v) { pitch = v; } };
+if (DEBUG) window.__p = { get QL() { return QL; }, get step() { return step; }, GPU, get AC() { return AC; }, get amb() { return amb; }, get A() { return A; }, portals, makePortal, expandPortal, cycle, setShape, camera, get pos() { return pos; }, set yaw(v) { yaw = v; }, get yaw() { return yaw; }, set pitch(v) { pitch = v; } };
+
+// ---------- quality governor: steps down when frames run slow, and back up when there is room ----------
+let ema = 16, slowT = 0, fastT = 0, coolT = 0, frameN = 0, statT = 0;
+const stats = Q.has("stats") ? Object.assign(document.createElement("div"), { style: "position:fixed;z-index:9;left:10px;bottom:10px;font:12px ui-monospace,monospace;color:#fff;background:#0009;padding:4px 8px;border-radius:6px" }) : null;
+if (stats) document.body.append(stats);
+function govern(ft, now) {
+  if (document.hidden || ft > 250 || now < quietUntil || !A || portals.some((p) => p.loading)) { slowT = fastT = 0; return; }   // ignore stalls while worlds load
+  ema += (ft - ema) * 0.06;
+  if (stats && now - statT > 500) { statT = now; stats.textContent = `${Math.round(1000 / ema)} fps · ${QL.name}${qAuto ? " (auto)" : ""} · ${res.x}×${res.y}`; }
+  if (!qAuto || now < coolT) return;
+  if (ema > 30) { slowT += ft; fastT = 0; } else if (ema < 19) { fastT += ft; slowT = 0; } else { slowT = Math.max(0, slowT - ft); fastT = 0; }
+  if (slowT > (ema > 50 ? 600 : 1500) && step > 0) { if (lastUp === step) upFails[step]++; step--; applyQuality(); slowT = 0; coolT = now + (ema > 50 ? 1200 : 2500); ema = Math.min(ema, 40); }   // very slow: drop faster
+  else if (fastT > 6000 && step < qTop && upFails[step + 1] < 2) { step++; lastUp = step; applyQuality(); fastT = 0; coolT = now + 3000; }
+}
+$("qBtn").onclick = () => {   // Auto, then each level by hand, then back to Auto
+  if (qAuto) { qAuto = false; step = 0; } else if (step < 3) step++; else { qAuto = true; step = startStep; upFails.fill(0); }
+  applyQuality();
+};
 
 // ---------- frame ----------
 let last = performance.now(), dockT = 0;
 const _r = new THREE.Vector3();
 renderer.setAnimationLoop((now) => {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = now / 1000;
+  const ft = now - last, dt = Math.min(0.05, ft / 1000); last = now; const t = now / 1000; frameN++; govern(ft, now);
   if (!busy()) {
     const f0 = fwd(); _r.set(-f0.z, 0, f0.x); const sp = (keys.ShiftLeft ? 3 : 1.4) * dt;
     if (keys.KeyW || keys.ArrowUp) pos.addScaledVector(f0, sp); if (keys.KeyS || keys.ArrowDown) pos.addScaledVector(f0, -sp);
@@ -588,7 +724,7 @@ renderer.setAnimationLoop((now) => {
     }
     if (Math.random() < dt * 0.9) poke(P, (Math.random() - 0.5) * 6.28, (Math.random() - 0.5) * 0.5);   // it never sits still
     stepRing(P, dt);
-    if (P.B && P.open > 0.3) { P.emitAcc += dt * (P.expand ? 2200 : (PHONE ? 420 : 900)) * Math.min(P.open, 1.5); const n = P.emitAcc | 0; P.emitAcc -= n; emitFrom(P, n, P.expand ? 2.2 : 1); }
+    if (P.B && P.open > 0.3) { P.emitAcc += dt * (P.expand ? 2200 : (PHONE ? 420 : 900)) * Math.min(P.open, 1.5) * QL.np; const n = P.emitAcc | 0; P.emitAcc -= n; emitFrom(P, n, P.expand ? 2.2 : 1); }
     P.flash = Math.max(0, P.flash - dt * 2.5);
     P.mat.uniforms.uOpen.value = Math.max(0, P.open); P.sparkMat.uniforms.uOpen.value = Math.max(0.15, Math.min(P.open, 1.3)); P.mat.uniforms.uT.value = P.sparkMat.uniforms.uT.value = t; P.mat.uniforms.uFlash.value = P.flash * 0.6;
     P.sparkMat.uniforms.uPx.value = res.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
@@ -596,15 +732,20 @@ renderer.setAnimationLoop((now) => {
   applyCam();
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   if (arrive && A) { const k = Math.min(1, (now - arrive.t0) / 1900); A.U.burst.value = 0.9 * (1 - ease(k)); A.mesh.updateVersion(); if (k >= 1) { A.U.burst.value = 0; arrive = null; } }
-  if (A) { A.U.t.value = t; const P0 = nearest(); if (P0) { A.U.glowP.value.copy(toLocal(A, P0.pos)); A.U.glowR.value = 0.75 * Math.min(P0.open, 1); } else A.U.glowR.value = 0; if (portals.length || arrive) A.mesh.updateVersion(); }
+  if (A) { A.U.t.value = t; const P0 = nearest(); if (P0) { A.U.glowP.value.copy(toLocal(A, P0.pos)); A.U.glowR.value = 0.75 * Math.min(P0.open, 1); } else A.U.glowR.value = 0; if (arrive || (portals.length && frameN % QL.mod === 0)) A.mesh.updateVersion(); }
   flash = Math.max(0, flash - dt * 2.2);
   stepSparks(dt); spMat.uniforms.uT.value = t; spMat.uniforms.uPx.value = res.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   { let lvl = 0; for (const P of portals) lvl += Math.min(P.open, 1) / Math.max(1, camera.position.distanceTo(P.pos) ** 2); setHum(Math.min(0.06, lvl * 0.05) + (busy() ? 0.05 : 0)); }
+  if (swoosh) { let best = 0, pan = 0; for (const P of portals) { const v = P.vel.length(); if (v > best) { best = v; pan = P.pos.clone().project(camera).x; } }
+    const walking = ["KeyW", "KeyS", "KeyA", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].some((k) => keys[k]) ? 0.22 : 0;
+    setSwoosh(best * 0.9 + Math.min(0.6, Math.abs(yawVel) * 0.08) + walking, pan); }
   for (const P of portals) { const c = P.pos.clone().add(new THREE.Vector3(0, -0.85 * Math.min(P.open, 1), 0)).project(camera), vis = c.z < 1 && P.open > 0.6 && !P.expand && Math.abs(c.x) < 1 && Math.abs(c.y) < 1;
     P.label.style.opacity = vis ? 1 : 0; if (vis) { P.label.style.left = (c.x * 0.5 + 0.5) * innerWidth + "px"; P.label.style.top = (-c.y * 0.5 + 0.5) * innerHeight + "px"; } }
   // render: each bubble's world from its matching camera, then yours, then the bubbles, then the lens pass
+  let pk = 0;
   for (const P of portals) {
     if (!P.B) continue;
+    if (QL.skip && !P.expand && (frameN + pk++) % 2) continue;   // Light: each bubble's world redraws every other frame
     P.camB.fov = camera.fov; P.camB.aspect = camera.aspect; P.camB.updateProjectionMatrix();
     P.camB.matrixWorld.multiplyMatrices(P.PAinv, camera.matrixWorld); P.camB.matrixWorld.decompose(P.camB.position, P.camB.quaternion, P.camB.scale); P.camB.updateMatrixWorld(true);
     renderer.setRenderTarget(P.rt); renderer.clear(); renderer.render(P.B.scene, P.camB);
