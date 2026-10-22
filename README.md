@@ -35,6 +35,8 @@ Add `?tour` to the URL for an automatic tour. To use your own worlds, see [world
 
 ## What it does beyond the original
 
+- **Sparks with real physics.** Thousands of sparks pour off the rim and are simulated in world space: they fall, drift, bounce off the actual walls, beds and floors of the 3D scan, split into smaller sparks when they hit hard, and settle as glowing dust.
+- **A jiggly rim.** The edge is a ring of 40 springs. Moving the bubble, or brushing it with the cursor, sends waves round it, and the view inside ripples with them.
 - **Bubbles behave like bubbles.** Each one sits on a soft spring, so it bobs, sways when you look around, squashes a little as it moves, and drifts back into view when you turn away.
 - **Several bubbles at once,** each a window into a different world.
 - **Three shapes:** an organic blob (the default), a round soap bubble, and a doorway with a ragged white-hot rim.
@@ -42,7 +44,7 @@ Add `?tour` to the URL for an automatic tour. To use your own worlds, see [world
 - **Soap bubbles and sparkles** drift off the rim; some sparkles fall and settle on the floor.
 - **Worlds break up and form.** The world you leave scatters; the one you arrive in assembles out of a violet mist.
 - **Walk through, too.** Walking into a bubble takes you through, the same as clicking.
-- **Sound made in the browser:** a chime when a bubble opens, a blip when it changes world, a whoosh when you step in. There are no audio files.
+- **Sound made in the browser:** a hum near bubbles, crackles as sparks hit, a wobble, chimes and a whoosh. There are no audio files.
 
 ## How it works
 
@@ -91,7 +93,19 @@ Each bubble has an anchor and a spring:
 - **Return.** If the anchor leaves your view, it eases back in front of you.
 - **Squash.** The squash comes from the speed and is applied to the drawn surface only. The frame used for the camera mapping stays rigid, so the world inside never warps with the wobble.
 
-### 5. Stepping in
+### 5. Sparks that hit the room
+
+When a world loads, every opaque splat centre is dropped into a 12 cm voxel grid, which gives a rough map of solid space (walls, furniture, floor) at almost no cost. Up to about 6,500 sparks are simulated on the CPU each frame with gravity and drag. When a spark's next position is solid, the surface normal comes from the neighbouring cells, and the spark bounces with friction. Hard hits split into two smaller sparks, and slow sparks stick and fade as dust. A few soap bubbles still drift up from the rim on the GPU.
+
+### 6. The jiggle
+
+The rim is a ring of 40 springs, each pulled back to rest and coupled to its neighbours, so a push at one point travels round as a wave. The bubble's own acceleration (it lags when it moves), small random pokes and the cursor all drive it. The spring values go to the shader as a uniform array and shape the outline; their total energy also drives a ripple in the view inside.
+
+### 7. Sound
+
+All synthesised with Web Audio: a soft hum that grows as you get close to a bubble, crackles when sparks hit things, a wobble when the rim is poked, a chime when a bubble opens, a blip when it changes world, and a whoosh when you step in. It starts on your first click or key press, and the top bar mutes it.
+
+### 8. Stepping in
 
 Clicking a bubble grows its shape well past the edges of the screen while you drift toward it. A radial motion blur, a colour split and a lens kick peak as it fills the view. At that moment the world you see is the other world, from the matching camera, so the swap is seamless: your position and facing are carried across with the same bubble transform, the other world becomes yours, and a new bubble forms ahead of you.
 
